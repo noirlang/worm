@@ -1,5 +1,5 @@
 export function homePage({ t, icon, assetPath, theme }) {
-  const logoFile = theme === "light" ? "yazili-logo-siyah.png" : "yazili-logo-beyaz.png";
+  const logoFile = "amele.png";
   return `
     <section class="page">
       <div class="hero home-hero">
