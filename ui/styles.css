@@ -163,12 +163,10 @@ button {
   height: 48px;
   display: grid;
   place-items: center;
-  padding: 6px;
+  padding: 0;
   border: 1px solid var(--line-strong);
   border-radius: 13px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.24)),
-    #05090d;
+  background: #05090d;
   color: var(--text);
   font-family: Georgia, "Times New Roman", serif;
   font-size: 25px;
@@ -181,11 +179,15 @@ button {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  object-position: center;
+  border-radius: 12px;
 }
 
 .theme-light .brand-mark {
-  background: #0a1116;
-  color: #fff;
+  background: #fdfbf7;
+  color: var(--text);
+  border-color: rgba(38, 33, 24, 0.18);
+  box-shadow: 0 12px 26px rgba(38, 33, 24, 0.12);
 }
 
 .icon-button,
