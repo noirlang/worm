@@ -91,6 +91,8 @@ pub fn classify_android_error(error: impl AsRef<str>) -> AndroidErrorInfo {
             "su: not found",
             "inaccessible or not found",
             "adbd cannot run as root",
+            "root profili secildi",
+            "root profili seçildi",
             "root yetkisi alinamadi",
             "root yetkisi alınamadı",
         ],

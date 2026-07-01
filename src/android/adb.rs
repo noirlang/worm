@@ -111,22 +111,20 @@ pub fn list_devices() -> Result<Vec<AndroidDevice>, String> {
         "android:adb",
         "Bagli Android cihazlari listeleniyor...",
     );
-    let output = Command::new("adb")
-        .args(["devices", "-l"])
-        .output()
-        .map_err(|err| {
-            let msg = if err.kind() == io::ErrorKind::NotFound {
-                "ADB bulunamadi".to_string()
-            } else {
-                format!("ADB cihaz listesi alinamadi: {err}")
-            };
-            crate::logging::runtime_log(
-                crate::logging::LogLevel::Error,
-                "android:adb",
-                format!("ADB devices komutu basarisiz: {}", msg),
-            );
-            msg
-        })?;
+    let mut output = run_adb_devices_output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = first_non_empty(&stderr)
+            .or_else(|| first_non_empty(&stdout))
+            .unwrap_or_else(|| "ADB cihaz listesi basarisiz oldu".to_string());
+
+        if detail.contains("daemon not running") || detail.contains("daemon started") {
+            std::thread::sleep(Duration::from_millis(500));
+            output = run_adb_devices_output()?;
+        }
+    }
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -156,6 +154,25 @@ pub fn list_devices() -> Result<Vec<AndroidDevice>, String> {
         ),
     );
     Ok(devices)
+}
+
+fn run_adb_devices_output() -> Result<std::process::Output, String> {
+    Command::new("adb")
+        .args(["devices", "-l"])
+        .output()
+        .map_err(|err| {
+            let msg = if err.kind() == io::ErrorKind::NotFound {
+                "ADB bulunamadi".to_string()
+            } else {
+                format!("ADB cihaz listesi alinamadi: {err}")
+            };
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Error,
+                "android:adb",
+                format!("ADB devices komutu basarisiz: {}", msg),
+            );
+            msg
+        })
 }
 
 /// Seri numarası verilen cihazda kısa ADB komutu çalıştırır.

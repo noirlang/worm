@@ -778,7 +778,13 @@ pub(super) fn trim_for_record(value: &str, max_len: usize) -> String {
     if value.len() <= max_len {
         return value.to_string();
     }
-    let mut out = value[..max_len].to_string();
+    let safe_end = value
+        .char_indices()
+        .map(|(idx, _)| idx)
+        .take_while(|idx| *idx <= max_len)
+        .last()
+        .unwrap_or(0);
+    let mut out = value[..safe_end].to_string();
     out.push_str("\n[truncated]");
     out
 }
@@ -812,5 +818,11 @@ Accounts: 2
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].get("address").unwrap(), "5551234");
         assert_eq!(rows[0].get("body").unwrap(), "hello");
+    }
+
+    #[test]
+    fn trim_for_record_preserves_utf8_boundaries() {
+        let trimmed = trim_for_record("Merhaba arkadaşlar", 12);
+        assert!(trimmed.ends_with("[truncated]"));
     }
 }
