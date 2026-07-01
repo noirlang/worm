@@ -45,6 +45,11 @@ impl Default for AppSettings {
     }
 }
 
+/// Kalıcı kullanıcı ayarlarının varsayılan dosya yolunu döndürür.
+pub fn default_settings_path() -> PathBuf {
+    home_dir().join("Amele").join("ayarlar.json")
+}
+
 impl AppSettings {
     /// Ayar dosyasını okur; dosya yoksa varsayılan ayar döndürür.
     pub fn load(path: impl AsRef<Path>) -> AmeleResult<Self> {

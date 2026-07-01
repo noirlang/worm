@@ -44,6 +44,8 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
             );
             system::open_dev_console_endpoint()
         }
+        ("GET", "/api/settings") => system::settings_get_endpoint(),
+        ("POST", "/api/settings") => system::settings_save_endpoint(body),
         ("GET", "/api/settings-default") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Debug,
