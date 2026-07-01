@@ -266,24 +266,68 @@ function isLocalWorkflowBlocked(workflow) {
 }
 
 function setTheme(theme) {
-  state.theme = theme;
-  localStorage.setItem("amele-theme", theme);
-  app.classList.toggle("theme-light", theme === "light");
-  app.classList.toggle("theme-dark", theme !== "light");
-  
-  const brandImg = document.querySelector("#brand-logo-img");
-  if (brandImg) {
-    brandImg.src = theme === "light" ? "./assets/logo/logo-siyah.png" : "./assets/logo/logo.png";
-  }
+  const nextTheme = theme === "light" ? "light" : "dark";
+  state.theme = nextTheme;
+  localStorage.setItem("amele-theme", nextTheme);
+  app.classList.toggle("theme-light", nextTheme === "light");
+  app.classList.toggle("theme-dark", nextTheme !== "light");
+  syncBrandLogo();
 }
 
 function setLanguage(language) {
-  state.language = language;
-  localStorage.setItem("amele-language", language);
-  document.documentElement.lang = language;
+  const nextLanguage = language === "en" ? "en" : "tr";
+  state.language = nextLanguage;
+  localStorage.setItem("amele-language", nextLanguage);
+  document.documentElement.lang = nextLanguage;
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
   });
+}
+
+function syncBrandLogo() {
+  const brandImg = document.querySelector("#brand-logo-img");
+  if (!brandImg) return;
+  brandImg.src = state.theme === "light" ? "./assets/logo/logo-siyah.png" : "./assets/logo/logo.png";
+}
+
+function applyPersistedSettings(settings) {
+  if (!settings || typeof settings !== "object") return;
+  setLanguage(settings.dil === "en" ? "en" : "tr");
+  setTheme(settings.karanlik_tema ? "dark" : "light");
+}
+
+async function loadPersistedSettings() {
+  if (!backendReady()) return;
+  try {
+    const result = await apiRequest("/api/settings");
+    applyPersistedSettings(result.settings);
+    devLog(
+      "INFO",
+      "ui:settings",
+      `Kalıcı ayarlar yüklendi: ${result.path || "(path yok)"}`,
+      apiRequest,
+      backendReady
+    );
+  } catch (error) {
+    devLog("WARN", "ui:settings", `Kalıcı ayarlar yüklenemedi: ${error.message}`, apiRequest, backendReady);
+  }
+}
+
+async function saveSettingsFromControls() {
+  const language = document.querySelector("[data-action='language-select']")?.value || state.language;
+  setLanguage(language);
+  setTheme(state.theme);
+  if (!backendReady()) return { path: "localStorage" };
+
+  const result = await apiRequest("/api/settings", {
+    method: "POST",
+    body: JSON.stringify({
+      theme: state.theme,
+      language: state.language
+    })
+  });
+  applyPersistedSettings(result.settings);
+  return result;
 }
 
 function render() {
@@ -345,11 +389,7 @@ function render() {
       theme: state.theme
     };
 
-    // Sync brand image source based on current theme state
-    const brandImg = document.querySelector("#brand-logo-img");
-    if (brandImg) {
-      brandImg.src = state.theme === "light" ? "./assets/logo/logo-siyah.png" : "./assets/logo/logo.png";
-    }
+    syncBrandLogo();
 
     view.innerHTML = routes[state.route]?.(pageCtx) || homePage(pageCtx);
   }
@@ -1535,8 +1575,17 @@ async function handleAction(button) {
   }
 
   if (action === "save-settings") {
-    setStatus("[data-settings-status]", `${icon("info")} ${t("settingsSaved")}`);
-    showToast(t("settingsSaved"));
+    try {
+      const result = await saveSettingsFromControls();
+      render();
+      const savedPath = result?.path ? `<br /><small>${escapeHtml(result.path)}</small>` : "";
+      setStatus("[data-settings-status]", `${icon("info")} ${t("settingsSaved")}${savedPath}`);
+      showToast(t("settingsSaved"));
+    } catch (error) {
+      const message = `Ayarlar kaydedilemedi: ${error.message}`;
+      setStatus("[data-settings-status]", `${icon("info")} ${escapeHtml(message)}`);
+      showToast(message, "error");
+    }
     return;
   }
 
@@ -2912,12 +2961,20 @@ async function previewCarvedFile(filePath) {
   }
 }
 
-setLanguage(state.language);
-setTheme(state.theme);
-installUiErrorHandlers();
-hydrateIcons();
-render();
+async function bootApp() {
+  setLanguage(state.language);
+  setTheme(state.theme);
+  await loadPersistedSettings();
+  installUiErrorHandlers();
+  hydrateIcons();
+  render();
 
-// Developer mode — 5 kez logoya tıklayınca aktifleşir
-initDeveloperMode({ apiRequest, backendReady });
-devLog("INFO", "ui:startup", `Amele ${APP_VERSION} başlatıldı — platform: ${state.platform}, dil: ${state.language}, tema: ${state.theme}, backend: ${backendAvailable}`, apiRequest, backendReady);
+  // Developer mode — 5 kez logoya tıklayınca aktifleşir
+  initDeveloperMode({ apiRequest, backendReady });
+  devLog("INFO", "ui:startup", `Amele ${APP_VERSION} başlatıldı — platform: ${state.platform}, dil: ${state.language}, tema: ${state.theme}, backend: ${backendAvailable}`, apiRequest, backendReady);
+}
+
+bootApp().catch((error) => {
+  console.error("Amele UI boot failed", error);
+  showToast(`Arayüz başlatılamadı: ${error.message || error}`, "error");
+});
