@@ -4,6 +4,7 @@
     windows_subsystem = "windows"
 )]
 use amele::android;
+use amele::android_analysis;
 use amele::disk;
 use amele::disk_analysis;
 use amele::evidence::EvidenceVault;
@@ -48,6 +49,11 @@ fn main() {
         Some("android-logical") => android_logical_command(args.collect()),
         Some("android-filesystem") => android_filesystem_command(args.collect()),
         Some("android-ram") => android_ram_command(args.collect()),
+        Some("android-capabilities") => android_capabilities_command(args.collect()),
+        Some("android-lemon-preflight") => android_lemon_preflight_command(args.collect()),
+        Some("android-remote-connect") => android_remote_connect_command(args.collect()),
+        Some("android-remote-disconnect") => android_remote_disconnect_command(args.collect()),
+        Some("android-case-analysis") => android_case_analysis_command(args.collect()),
         Some("disk-list-helper") => disk_list_helper_command(args.collect()),
         Some("image-helper") => image_helper_command(args.collect()),
         Some("ram-helper") => ram_helper_command(args.collect()),
@@ -192,9 +198,14 @@ fn print_help() {
            adb-status                              ADB kurulumunu kontrol et\n\
            android-devices                         Android cihazlarini listele\n\
            android-profile <serial>                Android cihaz profilini yazdir\n\
-           android-logical <serial> <vaka> [quick|full|root]\n\
+           android-logical <serial> <vaka> [quick|full|root|volatile]\n\
            android-filesystem <serial> <vaka> [--root]\n\
            android-ram <serial> <vaka> [volatile|root|physical] [--root]\n\
+           android-capabilities <serial>            Android edinim uygunluk raporu\n\
+           android-lemon-preflight <serial>         Lemon fiziksel RAM uygunluk kontrolu\n\
+           android-remote-connect <host> [port] [tcp|mesh] [etiket]\n\
+           android-remote-disconnect <serial>       Uzak Android ADB baglantisini kes\n\
+           android-case-analysis <vaka>             Android vaka cikti analiz ozeti\n\
            image-analyze <imaj> [mount_klasoru]    Disk imaj analiz ozeti\n\
            ram-summary <ram> <windows|linux> [symbols]\n\
            ram-strings <ram>                       RAM IOC/dizgi taramasi\n\
@@ -513,6 +524,82 @@ fn android_ram_command(args: Vec<String>) -> Result<(), String> {
     )
     .map_err(|err| crate_diagnostic(android::explain_android_error(err)))?;
     print_json(&result)
+}
+
+/// Android cihazın hangi edinim modlarına uygun olduğunu raporlar.
+fn android_capabilities_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanim: android-capabilities <serial>".to_string());
+    }
+    let profile = android::detect_device_profile(&args[0])
+        .map_err(|err| crate_diagnostic(android::explain_android_error(err)))?;
+    let report = android::build_android_capability_report(&args[0], &profile);
+    print_json(&json!({
+        "profile": profile,
+        "capabilities": report,
+    }))
+}
+
+/// Lemon fiziksel RAM aracı için cihaz ön kontrolünü çalıştırır.
+fn android_lemon_preflight_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanim: android-lemon-preflight <serial>".to_string());
+    }
+    let report = android::lemon_preflight(&args[0]);
+    print_json(&report)
+}
+
+/// TCP/IP ADB veya MESH relay endpoint'ine bağlanır.
+fn android_remote_connect_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err(
+            "Kullanim: android-remote-connect <host> [port] [tcp|mesh] [etiket]".to_string(),
+        );
+    }
+    let host = args[0].clone();
+    let port = args
+        .get(1)
+        .map(|value| parse_port(value))
+        .transpose()?
+        .unwrap_or(5555);
+    let kind = match args.get(2).map(String::as_str) {
+        Some("mesh") | Some("mesh_relay") => android::RemoteEndpointKind::MeshRelay,
+        _ => android::RemoteEndpointKind::TcpAdb,
+    };
+    let label = args
+        .get(3)
+        .cloned()
+        .unwrap_or_else(|| format!("{}:{}", host, port));
+    let endpoint = android::RemoteAndroidEndpoint {
+        label,
+        host,
+        port,
+        kind,
+    };
+    let result = android::connect_remote_endpoint(&endpoint);
+    print_json(&json!({
+        "endpoint": endpoint,
+        "result": result,
+    }))
+}
+
+/// Uzak Android ADB bağlantısını keser.
+fn android_remote_disconnect_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanim: android-remote-disconnect <serial>".to_string());
+    }
+    let result = android::disconnect_remote_endpoint(&args[0]);
+    print_json(&result)
+}
+
+/// Seçilen vakanın Android çıktılarından analiz özeti üretir.
+fn android_case_analysis_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanim: android-case-analysis <vaka>".to_string());
+    }
+    let vault = cli_case_vault(&args[0])?;
+    let report = android_analysis::analyze_android_case(&vault.case_name, &vault.android_dir);
+    print_json(&report)
 }
 
 /// Yetkili helper sürecinde diskleri listeleyip sonucu dosyaya yazar.
@@ -1195,7 +1282,8 @@ fn print_step_progress(label: &str, done: u32, total: u32, step: &str) {
     if total == 0 {
         eprintln!("{label}: {step}");
     } else {
-        eprintln!("{label}: {}/{} {}", done.saturating_add(1), total, step);
+        let shown = if done == 0 { 1 } else { done.min(total) };
+        eprintln!("{label}: {}/{} {}", shown, total, step);
     }
 }
 

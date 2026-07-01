@@ -41,6 +41,77 @@ struct ParsedPackage {
     raw: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+/// AccountManager çıktısından çıkarılan hesap özetidir.
+struct SocialAccountRecord {
+    provider: String,
+    account_type: String,
+    account_name: String,
+    confidence: String,
+    source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+/// Kurulu sosyal/iletişim uygulamasını paket bilgisiyle taşır.
+struct SocialAppRecord {
+    platform: String,
+    package: String,
+    apk_path: Option<String>,
+    uid: Option<String>,
+    version_code: Option<String>,
+    installed: bool,
+    source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+/// Çalışan sosyal/iletişim uygulaması sürecini temsil eder.
+struct SocialProcessRecord {
+    platform: String,
+    package: String,
+    pid: u32,
+    process_name: String,
+    user: Option<String>,
+    source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+/// Non-root sosyal medya edinimi için kaynak ve sınırları birlikte raporlar.
+struct SocialSummary<T> {
+    source: String,
+    limitation: String,
+    records: Vec<T>,
+}
+
+const SOCIAL_PACKAGES: &[(&str, &str)] = &[
+    ("google", "com.google.android.gm"),
+    ("google", "com.google.android.gms"),
+    ("google", "com.google.android.googlequicksearchbox"),
+    ("instagram", "com.instagram.android"),
+    ("instagram", "com.instaflow.android"),
+    ("x_twitter", "com.twitter.android"),
+    ("facebook", "com.facebook.katana"),
+    ("messenger", "com.facebook.orca"),
+    ("whatsapp", "com.whatsapp"),
+    ("whatsapp_business", "com.whatsapp.w4b"),
+    ("telegram", "org.telegram.messenger"),
+    ("telegram_plus", "org.telegram.plus"),
+    ("signal", "org.thoughtcrime.securesms"),
+    ("discord", "com.discord"),
+    ("tiktok", "com.zhiliaoapp.musically"),
+    ("tiktok", "com.ss.android.ugc.trill"),
+    ("snapchat", "com.snapchat.android"),
+    ("linkedin", "com.linkedin.android"),
+    ("reddit", "com.reddit.frontpage"),
+    ("pinterest", "com.pinterest"),
+    ("skype", "com.skype.raider"),
+    ("teams", "com.microsoft.teams"),
+    ("zoom", "us.zoom.videomeetings"),
+    ("viber", "com.viber.voip"),
+    ("line", "jp.naver.line.android"),
+    ("wechat", "com.tencent.mm"),
+    ("bip", "com.turkcell.bip"),
+];
+
 /// ADB shell komutunun çıktısını dosyaya yazar ve sonucu standart edinim kaydına çevirir.
 fn collect_shell_output(
     serial: &str,
@@ -182,6 +253,194 @@ fn parse_package_rows(output: &str) -> Vec<ParsedPackage> {
             })
         })
         .collect()
+}
+
+/// Kurulu sosyal/iletişim uygulamalarını paket listesinden özetler.
+fn collect_social_apps(serial: &str, dir: &std::path::Path) -> AcquisitionItem {
+    let output = std::fs::read_to_string(dir.join("packages.txt")).or_else(|_| {
+        run_adb_command(
+            serial,
+            &[
+                "shell",
+                "pm list packages -f -U --show-versioncode 2>/dev/null || pm list packages -f",
+            ],
+        )
+    });
+
+    match output {
+        Ok(output) => {
+            let packages = parse_package_rows(&output);
+            let mut records = Vec::new();
+            for (platform, package_name) in SOCIAL_PACKAGES {
+                if let Some(package) = packages.iter().find(|pkg| pkg.package == *package_name) {
+                    records.push(SocialAppRecord {
+                        platform: (*platform).to_string(),
+                        package: package.package.clone(),
+                        apk_path: package.apk_path.clone(),
+                        uid: package.uid.clone(),
+                        version_code: package.version_code.clone(),
+                        installed: true,
+                        source: "pm list packages".to_string(),
+                    });
+                }
+            }
+
+            let summary = SocialSummary {
+                source: "pm list packages -f -U --show-versioncode".to_string(),
+                limitation: "Bu çıktı kurulu sosyal uygulamaları gösterir; giriş yapılmış kullanıcı adını garanti etmez.".to_string(),
+                records,
+            };
+            write_json_acquisition_item(dir, "social_apps", "social_apps.json", &summary)
+        }
+        Err(err) => AcquisitionItem {
+            category: "social_apps".to_string(),
+            file_name: "social_apps.json".to_string(),
+            size: 0,
+            success: false,
+            error: Some(err),
+        },
+    }
+}
+
+/// AccountManager üzerinden görülebilen Google ve sosyal hesapları yapılandırılmış JSON'a çevirir.
+fn collect_social_accounts(serial: &str, dir: &std::path::Path) -> AcquisitionItem {
+    let output = std::fs::read_to_string(dir.join("dumpsys_account.txt"))
+        .or_else(|_| run_adb_command(serial, &["shell", "dumpsys", "account"]));
+
+    match output {
+        Ok(output) => {
+            let mut records = Vec::new();
+            for line in output.lines() {
+                let trimmed = line.trim();
+                let Some(account) = parse_account_line(trimmed) else {
+                    continue;
+                };
+                let provider = classify_account_provider(&account.1);
+                if provider == "other" && !looks_like_email_or_social_account(&account.0) {
+                    continue;
+                }
+                records.push(SocialAccountRecord {
+                    provider,
+                    account_name: account.0,
+                    account_type: account.1,
+                    confidence: "account_manager".to_string(),
+                    source: "dumpsys account".to_string(),
+                });
+            }
+
+            let summary = SocialSummary {
+                source: "dumpsys account / Android AccountManager".to_string(),
+                limitation: "Google e-posta ve AccountManager'a kayıtlı uygulama hesapları görülebilir; Instagram/X gibi private app oturumları root olmadan genelde görünmez.".to_string(),
+                records,
+            };
+            write_json_acquisition_item(dir, "social_accounts", "social_accounts.json", &summary)
+        }
+        Err(err) => AcquisitionItem {
+            category: "social_accounts".to_string(),
+            file_name: "social_accounts.json".to_string(),
+            size: 0,
+            success: false,
+            error: Some(err),
+        },
+    }
+}
+
+/// Çalışan süreçlerden sosyal/iletişim uygulamalarını ayıklar.
+fn collect_social_processes(serial: &str, dir: &std::path::Path) -> AcquisitionItem {
+    let output = std::fs::read_to_string(dir.join("processes.txt"))
+        .or_else(|_| run_adb_command(serial, &["shell", "ps", "-A"]));
+
+    match output {
+        Ok(output) => {
+            let mut records = Vec::new();
+            for line in output.lines().skip(1) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                let Some(name) = parts.last().copied() else {
+                    continue;
+                };
+                let Some((platform, package)) = social_package_for_process(name) else {
+                    continue;
+                };
+                let pid = parts
+                    .iter()
+                    .find_map(|part| part.parse::<u32>().ok())
+                    .unwrap_or_default();
+                records.push(SocialProcessRecord {
+                    platform: platform.to_string(),
+                    package: package.to_string(),
+                    pid,
+                    process_name: name.to_string(),
+                    user: parts.first().map(|value| (*value).to_string()),
+                    source: "ps -A".to_string(),
+                });
+            }
+
+            let summary = SocialSummary {
+                source: "ps -A".to_string(),
+                limitation: "Bu çıktı uygulamanın çalışan sürecini gösterir; tek başına hesap kullanıcı adını kanıtlamaz.".to_string(),
+                records,
+            };
+            write_json_acquisition_item(dir, "social_processes", "social_processes.json", &summary)
+        }
+        Err(err) => AcquisitionItem {
+            category: "social_processes".to_string(),
+            file_name: "social_processes.json".to_string(),
+            size: 0,
+            success: false,
+            error: Some(err),
+        },
+    }
+}
+
+fn parse_account_line(line: &str) -> Option<(String, String)> {
+    let rest = line.strip_prefix("Account {")?.strip_suffix('}')?;
+    let mut name = None;
+    let mut account_type = None;
+    for part in rest.split(',') {
+        let part = part.trim();
+        if let Some(value) = part.strip_prefix("name=") {
+            name = Some(value.trim().to_string());
+        } else if let Some(value) = part.strip_prefix("type=") {
+            account_type = Some(value.trim().to_string());
+        }
+    }
+    Some((name?, account_type?))
+}
+
+fn classify_account_provider(account_type: &str) -> String {
+    let lower = account_type.to_ascii_lowercase();
+    if lower.contains("google") {
+        "google".to_string()
+    } else if lower.contains("samsung") {
+        "samsung".to_string()
+    } else if lower.contains("whatsapp") {
+        "whatsapp".to_string()
+    } else if lower.contains("telegram") {
+        "telegram".to_string()
+    } else if lower.contains("facebook") {
+        "facebook".to_string()
+    } else if lower.contains("twitter") || lower.contains(".x") {
+        "x_twitter".to_string()
+    } else if lower.contains("instagram") {
+        "instagram".to_string()
+    } else if lower.contains("microsoft") {
+        "microsoft".to_string()
+    } else {
+        "other".to_string()
+    }
+}
+
+fn looks_like_email_or_social_account(value: &str) -> bool {
+    value.contains('@') || value.starts_with('+') || value.chars().any(|ch| ch.is_ascii_digit())
+}
+
+fn social_package_for_process(process_name: &str) -> Option<(&'static str, &'static str)> {
+    SOCIAL_PACKAGES
+        .iter()
+        .find(|(_, package)| {
+            process_name == *package || process_name.starts_with(&format!("{package}:"))
+        })
+        .copied()
 }
 
 /// Cihazdaki mevcut logcat tamponunu metin çıktısı olarak alır.
@@ -947,7 +1206,7 @@ fn collect_proc_memory_maps(serial: &str, dir: &std::path::Path) -> AcquisitionI
     let target_dir = dir.join("proc_memory_maps");
     let _ = std::fs::create_dir_all(&target_dir);
     let ps_output =
-        match run_adb_command_timeout(serial, &["shell", "ps", "-A"], Duration::from_secs(10)) {
+        match run_adb_command_timeout(serial, &["shell", "ps", "-A"], Duration::from_secs(20)) {
             Ok(output) => output,
             Err(err) => {
                 return AcquisitionItem {
@@ -1020,7 +1279,7 @@ fn collect_heapdump_candidates(serial: &str, dir: &std::path::Path) -> Acquisiti
     let dumpsys = match run_adb_command_timeout(
         serial,
         &["shell", "dumpsys", "package"],
-        Duration::from_secs(45),
+        Duration::from_secs(90),
     ) {
         Ok(output) => output,
         Err(err) => {
@@ -1069,7 +1328,7 @@ fn collect_debug_heap_dumps(serial: &str, dir: &std::path::Path) -> AcquisitionI
             run_adb_command_timeout(
                 serial,
                 &["shell", "dumpsys", "package"],
-                Duration::from_secs(45),
+                Duration::from_secs(90),
             )
             .map(|output| parse_debuggable_packages(&output))
             .unwrap_or_default()
@@ -1189,6 +1448,38 @@ fn write_text_acquisition_item(
             size: 0,
             success: false,
             error: Some(format!("Dosya yazilamadi: {err}")),
+        },
+    }
+}
+
+/// JSON çıktısını dosyaya yazar ve ortak AcquisitionItem formatına çevirir.
+fn write_json_acquisition_item<T: Serialize>(
+    dir: &std::path::Path,
+    category: &str,
+    file_name: &str,
+    value: &T,
+) -> AcquisitionItem {
+    match serde_json::to_vec_pretty(value)
+        .map_err(|err| err.to_string())
+        .and_then(|content| {
+            let path = dir.join(file_name);
+            std::fs::write(&path, &content)
+                .map(|_| content.len() as u64)
+                .map_err(|err| err.to_string())
+        }) {
+        Ok(size) => AcquisitionItem {
+            category: category.to_string(),
+            file_name: file_name.to_string(),
+            size,
+            success: true,
+            error: None,
+        },
+        Err(err) => AcquisitionItem {
+            category: category.to_string(),
+            file_name: file_name.to_string(),
+            size: 0,
+            success: false,
+            error: Some(format!("JSON yazilamadi: {err}")),
         },
     }
 }
@@ -1410,6 +1701,7 @@ where
             "device_info" => collect_device_info(serial, output_dir),
             "packages" => collect_packages(serial, output_dir),
             "packages_json" => collect_packages_json(serial, output_dir),
+            "social_apps" => collect_social_apps(serial, output_dir),
             "logcat" => collect_logcat(serial, output_dir),
             "system_logs" => collect_system_logs(serial, output_dir),
             "dumpsys_battery" => {
@@ -1428,6 +1720,7 @@ where
             "dumpsys_account" => {
                 collect_dumpsys(serial, "account", "dumpsys_account.txt", output_dir)
             }
+            "social_accounts" => collect_social_accounts(serial, output_dir),
             "dumpsys_connectivity" => collect_dumpsys(
                 serial,
                 "connectivity",
@@ -1509,6 +1802,7 @@ where
             "device_settings" => collect_device_settings(serial, output_dir),
             "network_info" => collect_network_info(serial, output_dir),
             "processes" => collect_processes(serial, output_dir),
+            "social_processes" => collect_social_processes(serial, output_dir),
             "disk_usage" => collect_disk_usage(serial, output_dir),
             "content_sms" => collect_content_query(
                 serial,
