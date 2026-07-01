@@ -1,5 +1,6 @@
 //! Android metin/JSON çıktılarından yapılandırılmış MFT kayıtları çıkarır.
 use super::format::{Field, MAX_RECORDS_PER_SOURCE, MAX_TEXT_INPUT, Record, RecordType};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
@@ -17,6 +18,9 @@ pub(super) fn build_logical_records(dir: &Path) -> Vec<Record> {
     }
     if let Some(content) = read_text_file(dir.join("dumpsys_account.txt")) {
         records.extend(parse_account_records(&content));
+    }
+    if let Some(content) = read_text_file(dir.join("turkey_app_storage.json")) {
+        records.extend(parse_turkey_app_storage_records(&content));
     }
     if let Some(content) = read_text_file(dir.join("dumpsys_wifi.txt")) {
         records.extend(parse_wifi_records(&content));
@@ -111,6 +115,52 @@ fn parse_getprop_records(content: &str) -> Vec<Record> {
                 RecordType::Telemetry,
                 vec![Field::string(0x01, key), Field::string(0x02, value)],
             )
+        })
+        .collect()
+}
+
+/// Türkiye uygulama depolama JSON çıktısından kısa telemetri kayıtları üretir.
+fn parse_turkey_app_storage_records(content: &str) -> Vec<Record> {
+    let Ok(value) = serde_json::from_str::<Value>(content) else {
+        return Vec::new();
+    };
+    let Some(records) = value.get("records").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+
+    records
+        .iter()
+        .take(MAX_RECORDS_PER_SOURCE)
+        .filter_map(|record| {
+            let platform = record.get("platform").and_then(Value::as_str)?;
+            let package = record.get("package").and_then(Value::as_str)?;
+            let category = record
+                .get("category")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let public_paths = record
+                .get("public_paths")
+                .and_then(Value::as_array)
+                .map(|paths| {
+                    paths
+                        .iter()
+                        .filter(|path| path.get("exists").and_then(Value::as_bool).unwrap_or(false))
+                        .filter_map(|path| path.get("path").and_then(Value::as_str))
+                        .take(8)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default();
+
+            Some(Record::new(
+                RecordType::Telemetry,
+                vec![
+                    Field::string(0x01, format!("turkey_app_storage.{package}")),
+                    Field::string(0x02, platform),
+                    Field::string(0x03, category),
+                    Field::string(0x04, trim_for_record(&public_paths, 2048)),
+                ],
+            ))
         })
         .collect()
 }

@@ -41,6 +41,16 @@ struct ParsedPackage {
     raw: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+/// Android uygulama hedef kataloğundaki tek paket kaydını temsil eder.
+struct AndroidAppTarget {
+    platform: &'static str,
+    package: &'static str,
+    category: &'static str,
+    priority: &'static str,
+    storage_hint: &'static str,
+}
+
 #[derive(Debug, Clone, Serialize)]
 /// AccountManager çıktısından çıkarılan hesap özetidir.
 struct SocialAccountRecord {
@@ -56,6 +66,9 @@ struct SocialAccountRecord {
 struct SocialAppRecord {
     platform: String,
     package: String,
+    category: String,
+    priority: String,
+    storage_hint: String,
     apk_path: Option<String>,
     uid: Option<String>,
     version_code: Option<String>,
@@ -68,6 +81,7 @@ struct SocialAppRecord {
 struct SocialProcessRecord {
     platform: String,
     package: String,
+    category: String,
     pid: u32,
     process_name: String,
     user: Option<String>,
@@ -82,34 +96,254 @@ struct SocialSummary<T> {
     records: Vec<T>,
 }
 
-const SOCIAL_PACKAGES: &[(&str, &str)] = &[
-    ("google", "com.google.android.gm"),
-    ("google", "com.google.android.gms"),
-    ("google", "com.google.android.googlequicksearchbox"),
-    ("instagram", "com.instagram.android"),
-    ("instagram", "com.instaflow.android"),
-    ("x_twitter", "com.twitter.android"),
-    ("facebook", "com.facebook.katana"),
-    ("messenger", "com.facebook.orca"),
-    ("whatsapp", "com.whatsapp"),
-    ("whatsapp_business", "com.whatsapp.w4b"),
-    ("telegram", "org.telegram.messenger"),
-    ("telegram_plus", "org.telegram.plus"),
-    ("signal", "org.thoughtcrime.securesms"),
-    ("discord", "com.discord"),
-    ("tiktok", "com.zhiliaoapp.musically"),
-    ("tiktok", "com.ss.android.ugc.trill"),
-    ("snapchat", "com.snapchat.android"),
-    ("linkedin", "com.linkedin.android"),
-    ("reddit", "com.reddit.frontpage"),
-    ("pinterest", "com.pinterest"),
-    ("skype", "com.skype.raider"),
-    ("teams", "com.microsoft.teams"),
-    ("zoom", "us.zoom.videomeetings"),
-    ("viber", "com.viber.voip"),
-    ("line", "jp.naver.line.android"),
-    ("wechat", "com.tencent.mm"),
-    ("bip", "com.turkcell.bip"),
+#[derive(Debug, Clone, Serialize)]
+/// Türkiye odaklı uygulama depolama taramasındaki tek yol sonucudur.
+struct AppStoragePathProbe {
+    path: String,
+    exists: bool,
+    size_kb: Option<u64>,
+    sample_files: Vec<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+/// Kurulu hedef uygulamanın erişilebilir ve root gerektiren depolama haritasıdır.
+struct TurkeyAppStorageRecord {
+    platform: String,
+    package: String,
+    category: String,
+    priority: String,
+    installed: bool,
+    apk_path: Option<String>,
+    uid: Option<String>,
+    version_code: Option<String>,
+    public_paths: Vec<AppStoragePathProbe>,
+    root_required_paths: Vec<String>,
+    storage_hint: String,
+    acquisition_note: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+/// Türkiye uygulama hedefleri için genel depolama raporu.
+struct TurkeyAppStorageSummary {
+    source: String,
+    limitation: String,
+    root_available: bool,
+    records: Vec<TurkeyAppStorageRecord>,
+    not_installed_high_priority_targets: Vec<String>,
+}
+
+const ANDROID_APP_TARGETS: &[AndroidAppTarget] = &[
+    AndroidAppTarget {
+        platform: "Google Mail",
+        package: "com.google.android.gm",
+        category: "account_mail",
+        priority: "global_high",
+        storage_hint: "Google hesap izleri AccountManager, Gmail uygulama paketi ve bildirimlerde aranır.",
+    },
+    AndroidAppTarget {
+        platform: "Google Play Services",
+        package: "com.google.android.gms",
+        category: "account_identity",
+        priority: "global_high",
+        storage_hint: "Google kimlik ve servis varlığı için temel paket; private veri root gerektirir.",
+    },
+    AndroidAppTarget {
+        platform: "Instagram",
+        package: "com.instagram.android",
+        category: "social",
+        priority: "global_high",
+        storage_hint: "Paylaşımlı Pictures/Movies Instagram klasörleri ve AccountManager/notification izleri kontrol edilir.",
+    },
+    AndroidAppTarget {
+        platform: "X / Twitter",
+        package: "com.twitter.android",
+        category: "social",
+        priority: "global_high",
+        storage_hint: "Oturum verisi private storage tarafındadır; non-root süreç, bildirim ve app media izleri alınır.",
+    },
+    AndroidAppTarget {
+        platform: "Facebook",
+        package: "com.facebook.katana",
+        category: "social",
+        priority: "global_high",
+        storage_hint: "Oturum/cache private storage tarafındadır; non-root paket, süreç ve bildirim izi raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "Messenger",
+        package: "com.facebook.orca",
+        category: "messaging",
+        priority: "global_high",
+        storage_hint: "Mesaj içeriği private storage tarafındadır; medya ve bildirim izleri kontrol edilir.",
+    },
+    AndroidAppTarget {
+        platform: "WhatsApp",
+        package: "com.whatsapp",
+        category: "messaging",
+        priority: "global_high",
+        storage_hint: "Android/media ve eski WhatsApp/Media klasörleri non-root için en değerli kaynaklardır.",
+    },
+    AndroidAppTarget {
+        platform: "WhatsApp Business",
+        package: "com.whatsapp.w4b",
+        category: "messaging",
+        priority: "global_high",
+        storage_hint: "Business medya klasörü ve bildirim izleri non-root toplanabilir; chat DB root/yedek gerektirir.",
+    },
+    AndroidAppTarget {
+        platform: "Telegram",
+        package: "org.telegram.messenger",
+        category: "messaging",
+        priority: "global_high",
+        storage_hint: "Telegram/ ve Android/media dizinleri medya için kontrol edilir; private cache root gerektirir.",
+    },
+    AndroidAppTarget {
+        platform: "Signal",
+        package: "org.thoughtcrime.securesms",
+        category: "messaging",
+        priority: "global_medium",
+        storage_hint: "Şifreli mesaj verisi private storage tarafındadır; non-root sadece varlık ve sınırlı medya izi verir.",
+    },
+    AndroidAppTarget {
+        platform: "TikTok",
+        package: "com.zhiliaoapp.musically",
+        category: "social_video",
+        priority: "global_high",
+        storage_hint: "Paylaşımlı medya, indirme ve bildirim izleri kontrol edilir; oturum private storage tarafındadır.",
+    },
+    AndroidAppTarget {
+        platform: "BiP",
+        package: "com.turkcell.bip",
+        category: "messaging_tr",
+        priority: "turkey_high",
+        storage_hint: "Türkiye'de yaygın mesajlaşma uygulaması; medya klasörü ve bildirim izleri kontrol edilir.",
+    },
+    AndroidAppTarget {
+        platform: "Trendyol",
+        package: "trendyol.com",
+        category: "shopping_tr",
+        priority: "turkey_high",
+        storage_hint: "Sipariş/oturum verisi private storage tarafındadır; non-root paket, bildirim ve app storage izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "Hepsiburada",
+        package: "com.pozitron.hepsiburada",
+        category: "shopping_tr",
+        priority: "turkey_high",
+        storage_hint: "Alışveriş oturumu private storage tarafındadır; non-root bildirim, usage ve app storage izleri alınır.",
+    },
+    AndroidAppTarget {
+        platform: "Sahibinden",
+        package: "com.sahibinden",
+        category: "classifieds_tr",
+        priority: "turkey_high",
+        storage_hint: "İlan/arama/mesajlaşma izleri private storage tarafında olabilir; non-root dış depolama ve bildirim izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "Getir",
+        package: "com.getir",
+        category: "delivery_tr",
+        priority: "turkey_high",
+        storage_hint: "Konum/sipariş oturumu private storage tarafındadır; non-root paket, bildirim ve usage izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "Yemeksepeti / foodpanda",
+        package: "com.global.foodpanda.android",
+        category: "food_delivery_tr",
+        priority: "turkey_high",
+        storage_hint: "Sipariş/konum verisi private storage tarafındadır; non-root uygulama varlığı ve bildirim izleri alınır.",
+    },
+    AndroidAppTarget {
+        platform: "Yemeksepeti Legacy",
+        package: "com.yemeksepeti.yemeksepeti",
+        category: "food_delivery_tr",
+        priority: "turkey_medium",
+        storage_hint: "Eski paket adı olasılığı için tutulur; varsa aynı depolama yolları kontrol edilir.",
+    },
+    AndroidAppTarget {
+        platform: "Migros",
+        package: "com.inomera.sm",
+        category: "grocery_tr",
+        priority: "turkey_high",
+        storage_hint: "Market/yemek/üyelik akışı private storage tarafındadır; non-root bildirim ve app storage izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "e-Nabız",
+        package: "tr.gov.saglik.enabiz",
+        category: "health_tr",
+        priority: "turkey_high",
+        storage_hint: "Sağlık verisi hassastır ve private storage/root/yasal izin gerektirir; non-root sadece varlık/iz raporu üretir.",
+    },
+    AndroidAppTarget {
+        platform: "Papara",
+        package: "com.mobillium.papara",
+        category: "finance_tr",
+        priority: "turkey_high",
+        storage_hint: "Finans oturumları private storage ve donanım güvenliğiyle korunur; non-root sadece paket/usage/bildirim izi verir.",
+    },
+    AndroidAppTarget {
+        platform: "Ziraat Mobil",
+        package: "com.ziraat.ziraatmobil",
+        category: "finance_tr",
+        priority: "turkey_high",
+        storage_hint: "Banka verisi private storage tarafındadır; non-root sadece paket, usage ve bildirim metaverisi raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "Garanti BBVA",
+        package: "com.garanti.cepsubesi",
+        category: "finance_tr",
+        priority: "turkey_high",
+        storage_hint: "Banka uygulaması private storage kullanır; iç veri erişimi root/yasal yetki gerektirir.",
+    },
+    AndroidAppTarget {
+        platform: "Enpara",
+        package: "finansbank.enpara",
+        category: "finance_tr",
+        priority: "turkey_medium",
+        storage_hint: "Finans oturumu private storage tarafındadır; non-root kullanım ve bildirim izleri kontrol edilir.",
+    },
+    AndroidAppTarget {
+        platform: "Turkish Airlines",
+        package: "com.turkishairlines.mobile",
+        category: "travel_tr",
+        priority: "turkey_medium",
+        storage_hint: "Bilet/hesap bilgileri private storage tarafındadır; non-root dosya ve bildirim izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "Pegasus",
+        package: "com.pozitron.pegasus",
+        category: "travel_tr",
+        priority: "turkey_medium",
+        storage_hint: "Seyahat hesabı private storage tarafındadır; non-root kullanım ve bildirim izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "BiTaksi",
+        package: "com.bitaksi.musteri",
+        category: "transport_tr",
+        priority: "turkey_medium",
+        storage_hint: "Konum/seyahat geçmişi private storage tarafındadır; non-root app storage ve bildirim izleri kontrol edilir.",
+    },
+    AndroidAppTarget {
+        platform: "Martı",
+        package: "com.martitech.marti",
+        category: "transport_tr",
+        priority: "turkey_medium",
+        storage_hint: "Konum ve sürüş oturumu private storage tarafındadır; non-root paket/usage/bildirim izleri alınır.",
+    },
+    AndroidAppTarget {
+        platform: "Discord",
+        package: "com.discord",
+        category: "messaging",
+        priority: "global_medium",
+        storage_hint: "Oturum ve mesaj cache private storage tarafındadır; non-root süreç/bildirim izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "LinkedIn",
+        package: "com.linkedin.android",
+        category: "social_business",
+        priority: "global_medium",
+        storage_hint: "Oturum private storage tarafındadır; non-root paket, süreç ve bildirim izleri raporlanır.",
+    },
 ];
 
 /// ADB shell komutunun çıktısını dosyaya yazar ve sonucu standart edinim kaydına çevirir.
@@ -255,27 +489,56 @@ fn parse_package_rows(output: &str) -> Vec<ParsedPackage> {
         .collect()
 }
 
+/// Paket envanterini mümkünse ayrıntılı komuttan, olmazsa mevcut dosyadan okur.
+fn load_package_inventory(
+    serial: &str,
+    dir: &std::path::Path,
+) -> Result<Vec<ParsedPackage>, String> {
+    let output = run_adb_command(
+        serial,
+        &[
+            "shell",
+            "pm list packages -f -U --show-versioncode 2>/dev/null || pm list packages -f",
+        ],
+    )
+    .or_else(|_| {
+        std::fs::read_to_string(dir.join("packages.txt")).map_err(|err| err.to_string())
+    })?;
+
+    Ok(parse_package_rows(&output))
+}
+
+/// Katalogdaki sosyal/iletişim uygulamalarını döndürür.
+fn social_targets() -> impl Iterator<Item = &'static AndroidAppTarget> {
+    ANDROID_APP_TARGETS.iter().filter(|target| {
+        matches!(
+            target.category,
+            "account_mail"
+                | "account_identity"
+                | "social"
+                | "social_video"
+                | "messaging"
+                | "messaging_tr"
+                | "social_business"
+        )
+    })
+}
+
 /// Kurulu sosyal/iletişim uygulamalarını paket listesinden özetler.
 fn collect_social_apps(serial: &str, dir: &std::path::Path) -> AcquisitionItem {
-    let output = std::fs::read_to_string(dir.join("packages.txt")).or_else(|_| {
-        run_adb_command(
-            serial,
-            &[
-                "shell",
-                "pm list packages -f -U --show-versioncode 2>/dev/null || pm list packages -f",
-            ],
-        )
-    });
+    let packages = load_package_inventory(serial, dir);
 
-    match output {
-        Ok(output) => {
-            let packages = parse_package_rows(&output);
+    match packages {
+        Ok(packages) => {
             let mut records = Vec::new();
-            for (platform, package_name) in SOCIAL_PACKAGES {
-                if let Some(package) = packages.iter().find(|pkg| pkg.package == *package_name) {
+            for target in social_targets() {
+                if let Some(package) = packages.iter().find(|pkg| pkg.package == target.package) {
                     records.push(SocialAppRecord {
-                        platform: (*platform).to_string(),
+                        platform: target.platform.to_string(),
                         package: package.package.clone(),
+                        category: target.category.to_string(),
+                        priority: target.priority.to_string(),
+                        storage_hint: target.storage_hint.to_string(),
                         apk_path: package.apk_path.clone(),
                         uid: package.uid.clone(),
                         version_code: package.version_code.clone(),
@@ -287,7 +550,7 @@ fn collect_social_apps(serial: &str, dir: &std::path::Path) -> AcquisitionItem {
 
             let summary = SocialSummary {
                 source: "pm list packages -f -U --show-versioncode".to_string(),
-                limitation: "Bu çıktı kurulu sosyal uygulamaları gösterir; giriş yapılmış kullanıcı adını garanti etmez.".to_string(),
+                limitation: "Bu çıktı kurulu sosyal/iletişim uygulamalarını gösterir; giriş yapılmış kullanıcı adını garanti etmez.".to_string(),
                 records,
             };
             write_json_acquisition_item(dir, "social_apps", "social_apps.json", &summary)
@@ -299,6 +562,205 @@ fn collect_social_apps(serial: &str, dir: &std::path::Path) -> AcquisitionItem {
             success: false,
             error: Some(err),
         },
+    }
+}
+
+/// Türkiye'de sık karşılaşılan uygulamalar için erişilebilir depolama izlerini raporlar.
+fn collect_turkey_app_storage(serial: &str, dir: &std::path::Path) -> AcquisitionItem {
+    let packages = match load_package_inventory(serial, dir) {
+        Ok(packages) => packages,
+        Err(err) => {
+            return AcquisitionItem {
+                category: "turkey_app_storage".to_string(),
+                file_name: "turkey_app_storage.json".to_string(),
+                size: 0,
+                success: false,
+                error: Some(format!("Paket envanteri okunamadi: {err}")),
+            };
+        }
+    };
+
+    let root_available = android_root_available(serial);
+    let mut records = Vec::new();
+    let mut not_installed_high_priority_targets = Vec::new();
+
+    for target in ANDROID_APP_TARGETS {
+        let installed_package = packages.iter().find(|pkg| pkg.package == target.package);
+        if installed_package.is_none() {
+            if target.priority == "turkey_high" {
+                not_installed_high_priority_targets
+                    .push(format!("{} ({})", target.platform, target.package));
+            }
+            continue;
+        }
+
+        let package = installed_package.expect("checked above");
+        let public_paths = target_public_storage_paths(target)
+            .into_iter()
+            .map(|path| probe_public_storage_path(serial, &path))
+            .collect();
+        let root_required_paths = target_root_storage_paths(target);
+
+        records.push(TurkeyAppStorageRecord {
+            platform: target.platform.to_string(),
+            package: package.package.clone(),
+            category: target.category.to_string(),
+            priority: target.priority.to_string(),
+            installed: true,
+            apk_path: package.apk_path.clone(),
+            uid: package.uid.clone(),
+            version_code: package.version_code.clone(),
+            public_paths,
+            root_required_paths,
+            storage_hint: target.storage_hint.to_string(),
+            acquisition_note: if root_available {
+                "Root mevcut görünüyor; private app dizinleri ayrı root/file-system edinim adımında hedeflenebilir.".to_string()
+            } else {
+                "Root yok veya onaylanmadı; Android 10+ cihazlarda /data/user/0 ve diğer uygulamaların app-specific dizinleri ADB non-root ile okunamaz.".to_string()
+            },
+        });
+    }
+
+    let summary = TurkeyAppStorageSummary {
+        source: "pm list packages + /sdcard app-specific path probes".to_string(),
+        limitation: "Bu rapor Türkiye'de sık kullanılan hedef uygulamalar için kurulum ve erişilebilir dış depolama izlerini gösterir. Private uygulama verileri root, üretici yedeği veya yasal/cihaz sahibi onayı gerektirebilir.".to_string(),
+        root_available,
+        records,
+        not_installed_high_priority_targets,
+    };
+
+    write_json_acquisition_item(
+        dir,
+        "turkey_app_storage",
+        "turkey_app_storage.json",
+        &summary,
+    )
+}
+
+/// Android root erişimini kısa zaman aşımıyla yoklar.
+fn android_root_available(serial: &str) -> bool {
+    run_adb_command_timeout(serial, &["shell", "su -c id"], Duration::from_secs(3))
+        .map(|output| output.contains("uid=0") || output.contains("root"))
+        .unwrap_or(false)
+}
+
+/// Hedef uygulama için non-root denenebilecek dış depolama yollarını üretir.
+fn target_public_storage_paths(target: &AndroidAppTarget) -> Vec<String> {
+    let mut paths = vec![
+        format!("/sdcard/Android/media/{}", target.package),
+        format!("/sdcard/Android/data/{}", target.package),
+        format!("/sdcard/Android/obb/{}", target.package),
+    ];
+
+    match target.package {
+        "com.whatsapp" => {
+            paths.push("/sdcard/WhatsApp/Media".to_string());
+            paths.push("/sdcard/Pictures/WhatsApp".to_string());
+        }
+        "com.whatsapp.w4b" => {
+            paths.push("/sdcard/WhatsApp Business/Media".to_string());
+        }
+        "org.telegram.messenger" => {
+            paths.push("/sdcard/Telegram".to_string());
+        }
+        "com.instagram.android" => {
+            paths.push("/sdcard/Pictures/Instagram".to_string());
+            paths.push("/sdcard/Movies/Instagram".to_string());
+        }
+        "com.twitter.android" => {
+            paths.push("/sdcard/Pictures/Twitter".to_string());
+            paths.push("/sdcard/Download/Twitter".to_string());
+        }
+        "com.zhiliaoapp.musically" => {
+            paths.push("/sdcard/Movies/TikTok".to_string());
+            paths.push("/sdcard/Download/TikTok".to_string());
+        }
+        "com.turkcell.bip" => {
+            paths.push("/sdcard/BiP".to_string());
+        }
+        _ => {}
+    }
+
+    paths
+}
+
+/// Rootlu dosya sistemi ediniminde hedeflenmesi gereken private dizinleri üretir.
+fn target_root_storage_paths(target: &AndroidAppTarget) -> Vec<String> {
+    vec![
+        format!("/data/user/0/{}", target.package),
+        format!("/data/data/{}", target.package),
+        format!("/data_mirror/data_ce/null/0/{}", target.package),
+    ]
+}
+
+/// Tek dış depolama yolunu varlık, boyut ve örnek dosya listesiyle yoklar.
+fn probe_public_storage_path(serial: &str, path: &str) -> AppStoragePathProbe {
+    let quoted = adb_shell_quote(path);
+    let command = format!(
+        "if [ -e {quoted} ]; then echo __EXISTS__; du -sk {quoted} 2>/dev/null | tail -n 1; find {quoted} -maxdepth 2 -type f 2>/dev/null | head -n 12; else echo __MISSING__; fi"
+    );
+
+    match run_adb_command_timeout(serial, &["shell", &command], Duration::from_secs(8)) {
+        Ok(output) => parse_storage_probe_output(path, &output),
+        Err(err) => AppStoragePathProbe {
+            path: path.to_string(),
+            exists: false,
+            size_kb: None,
+            sample_files: Vec::new(),
+            error: Some(err),
+        },
+    }
+}
+
+/// ADB shell için tek tırnaklı güvenli argüman üretir.
+fn adb_shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+/// Depolama yoklama çıktısını yapılandırılmış modele çevirir.
+fn parse_storage_probe_output(path: &str, output: &str) -> AppStoragePathProbe {
+    let mut lines = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty());
+    let Some(first) = lines.next() else {
+        return AppStoragePathProbe {
+            path: path.to_string(),
+            exists: false,
+            size_kb: None,
+            sample_files: Vec::new(),
+            error: Some("Boş ADB yanıtı".to_string()),
+        };
+    };
+
+    if first == "__MISSING__" {
+        return AppStoragePathProbe {
+            path: path.to_string(),
+            exists: false,
+            size_kb: None,
+            sample_files: Vec::new(),
+            error: None,
+        };
+    }
+
+    let mut size_kb = None;
+    let mut sample_files = Vec::new();
+    for line in lines {
+        if size_kb.is_none() {
+            size_kb = line.split_whitespace().next().and_then(|v| v.parse().ok());
+            if size_kb.is_some() {
+                continue;
+            }
+        }
+        sample_files.push(line.to_string());
+    }
+
+    AppStoragePathProbe {
+        path: path.to_string(),
+        exists: first == "__EXISTS__",
+        size_kb,
+        sample_files,
+        error: None,
     }
 }
 
@@ -358,7 +820,7 @@ fn collect_social_processes(serial: &str, dir: &std::path::Path) -> AcquisitionI
                 let Some(name) = parts.last().copied() else {
                     continue;
                 };
-                let Some((platform, package)) = social_package_for_process(name) else {
+                let Some(target) = social_package_for_process(name) else {
                     continue;
                 };
                 let pid = parts
@@ -366,8 +828,9 @@ fn collect_social_processes(serial: &str, dir: &std::path::Path) -> AcquisitionI
                     .find_map(|part| part.parse::<u32>().ok())
                     .unwrap_or_default();
                 records.push(SocialProcessRecord {
-                    platform: platform.to_string(),
-                    package: package.to_string(),
+                    platform: target.platform.to_string(),
+                    package: target.package.to_string(),
+                    category: target.category.to_string(),
                     pid,
                     process_name: name.to_string(),
                     user: parts.first().map(|value| (*value).to_string()),
@@ -434,13 +897,10 @@ fn looks_like_email_or_social_account(value: &str) -> bool {
     value.contains('@') || value.starts_with('+') || value.chars().any(|ch| ch.is_ascii_digit())
 }
 
-fn social_package_for_process(process_name: &str) -> Option<(&'static str, &'static str)> {
-    SOCIAL_PACKAGES
-        .iter()
-        .find(|(_, package)| {
-            process_name == *package || process_name.starts_with(&format!("{package}:"))
-        })
-        .copied()
+fn social_package_for_process(process_name: &str) -> Option<&'static AndroidAppTarget> {
+    social_targets().find(|target| {
+        process_name == target.package || process_name.starts_with(&format!("{}:", target.package))
+    })
 }
 
 /// Cihazdaki mevcut logcat tamponunu metin çıktısı olarak alır.
@@ -1646,6 +2106,32 @@ mod tests {
         assert_eq!(packages[0].version_code.as_deref(), Some("42"));
         assert_eq!(packages[1].package, "com.android.settings");
     }
+
+    #[test]
+    fn turkey_catalog_contains_common_targets() {
+        let packages: Vec<&str> = ANDROID_APP_TARGETS
+            .iter()
+            .filter(|target| target.priority == "turkey_high")
+            .map(|target| target.package)
+            .collect();
+
+        assert!(packages.contains(&"trendyol.com"));
+        assert!(packages.contains(&"com.getir"));
+        assert!(packages.contains(&"com.sahibinden"));
+        assert!(packages.contains(&"com.inomera.sm"));
+    }
+
+    #[test]
+    fn parses_storage_probe_output() {
+        let probe = parse_storage_probe_output(
+            "/sdcard/Android/media/com.whatsapp",
+            "__EXISTS__\n128\t/sdcard/Android/media/com.whatsapp\n/sdcard/Android/media/com.whatsapp/WhatsApp/Media/a.jpg\n",
+        );
+
+        assert!(probe.exists);
+        assert_eq!(probe.size_kb, Some(128));
+        assert_eq!(probe.sample_files.len(), 1);
+    }
 }
 
 /// Varsayılan profil ile Android mantıksal edinim akışını başlatır.
@@ -1702,6 +2188,7 @@ where
             "packages" => collect_packages(serial, output_dir),
             "packages_json" => collect_packages_json(serial, output_dir),
             "social_apps" => collect_social_apps(serial, output_dir),
+            "turkey_app_storage" => collect_turkey_app_storage(serial, output_dir),
             "logcat" => collect_logcat(serial, output_dir),
             "system_logs" => collect_system_logs(serial, output_dir),
             "dumpsys_battery" => {
