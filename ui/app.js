@@ -251,7 +251,7 @@ function setRoute(route) {
     const workflow = workflows[route.split(":")[1]];
     if (workflow && isLocalWorkflowBlocked(workflow)) {
       devLog("WARN", "ui:router", `Route blocked (platform mismatch): ${route} — expected ${workflow.platform}, got ${state.platform}`, apiRequest, backendReady);
-      showToast(t("platformBlocked", { platform: workflow.platform }), "error");
+      showToast(t("platformBlocked", { platform: workflow.platform }), "warning");
       return;
     }
   }
