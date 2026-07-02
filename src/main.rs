@@ -80,9 +80,16 @@ fn main() {
     if let Err(err) = result {
         report_fatal_error(&err);
         eprintln!("{err}");
-        print_help();
+        if should_print_help_on_error(&err) {
+            print_help();
+        }
         std::process::exit(2);
     }
+}
+
+/// Sadece kullanıcı komutu yanlış yazdığında genel yardım basar.
+fn should_print_help_on_error(err: &str) -> bool {
+    err.starts_with("Kullanim:") || err.starts_with("Bilinmeyen komut:")
 }
 
 #[cfg(target_os = "windows")]

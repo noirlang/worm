@@ -46,12 +46,16 @@ pub struct AndroidRecordTypeCount {
 /// Android vaka klasörünü okuyup dosya, timeline, korelasyon ve uyarı özetini üretir.
 pub fn analyze_android_case(case_name: &str, android_dir: &Path) -> AndroidCaseAnalysis {
     let files = list_files(android_dir);
-    let evidence = read_json(android_dir.join("evidence.json"));
-    let timeline = read_json(android_dir.join("timeline.json"));
-    let correlations = read_json(android_dir.join("correlations.json"));
-    let device_profile = read_json(android_dir.join("device_profile.json"));
-    let report_preview = read_text_preview(android_dir.join("mobile_report.txt"));
-    let volatile_sections = volatile_sections(android_dir.join("android_volatile_data.txt"));
+    let logical_dir = latest_dir_with_file(android_dir, "evidence.json")
+        .unwrap_or_else(|| android_dir.to_path_buf());
+    let volatile_dir = latest_dir_with_file(android_dir, "android_volatile_data.txt")
+        .unwrap_or_else(|| android_dir.to_path_buf());
+    let evidence = read_json(logical_dir.join("evidence.json"));
+    let timeline = read_json(logical_dir.join("timeline.json"));
+    let correlations = read_json(logical_dir.join("correlations.json"));
+    let device_profile = read_json(logical_dir.join("device_profile.json"));
+    let report_preview = read_text_preview(logical_dir.join("mobile_report.txt"));
+    let volatile_sections = volatile_sections(volatile_dir.join("android_volatile_data.txt"));
     let bugreport_present = android_dir.join("bugreport.zip").is_file()
         || files
             .iter()
@@ -131,6 +135,42 @@ fn collect_files(root: &Path, dir: &Path, files: &mut Vec<AndroidAnalysisFile>) 
                 size: meta.len(),
             });
         }
+    }
+}
+
+/// Android kök klasörü altında belirli dosyayı içeren en yeni edinim klasörünü bulur.
+fn latest_dir_with_file(root: &Path, file_name: &str) -> Option<PathBuf> {
+    if root.join(file_name).is_file() {
+        return Some(root.to_path_buf());
+    }
+
+    let mut candidates = Vec::new();
+    collect_dirs_with_file(root, file_name, &mut candidates);
+    candidates.sort_by(|left, right| {
+        let left_time = fs::metadata(left).and_then(|meta| meta.modified()).ok();
+        let right_time = fs::metadata(right).and_then(|meta| meta.modified()).ok();
+        right_time.cmp(&left_time).then_with(|| right.cmp(left))
+    });
+    candidates.into_iter().next()
+}
+
+/// Rekürsif olarak hedef dosyayı taşıyan alt klasörleri toplar.
+fn collect_dirs_with_file(dir: &Path, file_name: &str, candidates: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        if !meta.is_dir() {
+            continue;
+        }
+        if path.join(file_name).is_file() {
+            candidates.push(path.clone());
+        }
+        collect_dirs_with_file(&path, file_name, candidates);
     }
 }
 
@@ -288,5 +328,27 @@ mod tests {
         assert_eq!(report.record_count, 3);
         assert_eq!(report.record_types[0].record_type, "Sms");
         assert_eq!(report.record_types[0].count, 2);
+    }
+
+    #[test]
+    fn summarizes_nested_logical_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let logical_dir = dir.path().join("logical_20260702_113146");
+        fs::create_dir_all(&logical_dir).unwrap();
+        fs::write(
+            logical_dir.join("evidence.json"),
+            r#"{"records":[{"type":"Telemetry"},{"type":"Account"}]}"#,
+        )
+        .unwrap();
+        fs::write(
+            logical_dir.join("timeline.json"),
+            r#"{"events":[{"severity":3,"summary":"hit"}]}"#,
+        )
+        .unwrap();
+
+        let report = analyze_android_case("case1", dir.path());
+        assert_eq!(report.record_count, 2);
+        assert_eq!(report.timeline_event_count, 1);
+        assert_eq!(report.high_severity_count, 1);
     }
 }
