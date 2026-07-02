@@ -1595,9 +1595,16 @@ async function handleAction(button) {
       const result = await apiRequest("/api/update-check");
       state.latestUpdate = result;
       const asset = result.platform_asset || {};
+      const target = result.update_target || {};
       const assetLine = asset.name ? `<br />Asset: ${escapeHtml(asset.name)} (${formatBytes(asset.size)})` : `<br />${t("settings.noAsset")}`;
+      const packageLine = target.asset_package_label || target.package_label
+        ? `<br />${t("settings.package")}: ${escapeHtml(target.asset_package_label || target.package_label)}`
+        : "";
+      const commandLine = target.install_command
+        ? `<br />${t("settings.installCommand")}: <code>${escapeHtml(target.install_command)}</code>`
+        : "";
       setStatus("[data-update-status]", `${icon("info")} ${t("settings.latestVersion", { version: result.tag_name || result.name || "-" })}`);
-      setStatus("[data-update-log]", `${escapeHtml(result.body || t("settings.releaseNotes")).replaceAll("\n", "<br />")}${assetLine}`);
+      setStatus("[data-update-log]", `${escapeHtml(result.body || t("settings.releaseNotes")).replaceAll("\n", "<br />")}${assetLine}${packageLine}${commandLine}`);
       showToast(t("settings.updateDone"));
     } catch (error) {
       setStatus("[data-update-status]", `${icon("info")} ${t("settings.updateFailed", { message: escapeHtml(error.message) })}`);

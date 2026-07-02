@@ -112,7 +112,11 @@ function hashResult(label, key) {
   `;
 }
 
-export function settingsPage({ t, icon, state, platformLabel, APP_VERSION }) {
+export function settingsPage({ t, icon, state, platformLabel, APP_VERSION, escapeHtml }) {
+  const updateTarget = state.latestUpdate?.update_target || {};
+  const updateAsset = state.latestUpdate?.platform_asset || {};
+  const packageLabel = escapeHtml(updateTarget.asset_package_label || updateTarget.package_label || t("settings.packageAuto"));
+  const assetName = escapeHtml(updateAsset.name || t("settings.assetAuto"));
   return `
     <section class="page">
       <div class="settings-header">
@@ -154,7 +158,8 @@ export function settingsPage({ t, icon, state, platformLabel, APP_VERSION }) {
           <h3>${t("settings.update")}</h3>
           <div class="settings-meta">
             <span>${t("settings.installed")}: ${APP_VERSION}</span>
-            <span>Asset: ${state.platform === "windows" ? "amele-windows-x64.msi" : "amele-linux-x64.AppImage"}</span>
+            <span>${t("settings.package")}: ${packageLabel}</span>
+            <span>Asset: ${assetName}</span>
           </div>
           <div class="progress-bar" data-update-progress style="--value:0%"><span></span><b>0%</b></div>
           <div class="button-row">
