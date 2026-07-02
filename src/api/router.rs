@@ -1,7 +1,7 @@
 //! HTTP metod ve path değerlerini ilgili API endpoint fonksiyonlarına bağlar.
 use crate::server::{Response, json_error, json_ok};
 
-use super::{android, evidence, ram, system, wireguard};
+use super::{android, desktop, developer, evidence, ram, settings, system, update, wireguard};
 
 /// API HTTP metod/path çiftini ilgili endpoint fonksiyonuna yönlendirir ve detaylıca loglar.
 pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
@@ -33,19 +33,19 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
         })),
         ("GET", "/api/developer-logs") => {
             // Polling istekleri konsolu kirletmesin diye log seviyesini düşürebilir veya loglamayabiliriz.
-            system::developer_logs_endpoint()
+            developer::developer_logs_endpoint()
         }
-        ("POST", "/api/developer-log") => system::developer_log_endpoint(body),
+        ("POST", "/api/developer-log") => developer::developer_log_endpoint(body),
         ("POST", "/api/open-dev-console") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Info,
                 "api:devconsole",
                 "Developer konsol penceresi aciliyor",
             );
-            system::open_dev_console_endpoint()
+            desktop::open_dev_console_endpoint()
         }
-        ("GET", "/api/settings") => system::settings_get_endpoint(),
-        ("POST", "/api/settings") => system::settings_save_endpoint(body),
+        ("GET", "/api/settings") => settings::settings_get_endpoint(),
+        ("POST", "/api/settings") => settings::settings_save_endpoint(body),
         ("GET", "/api/settings-default") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Debug,
@@ -454,7 +454,7 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
                 "api:system",
                 "Uygulama guncelleme kontrolü yapiliyor",
             );
-            system::update_check_endpoint()
+            update::update_check_endpoint()
         }
         ("POST", "/api/update-download") => {
             crate::logging::runtime_log(
@@ -462,7 +462,7 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
                 "api:system",
                 "Guncelleme paketi indiriliyor",
             );
-            system::update_download_endpoint(body)
+            update::update_download_endpoint(body)
         }
         ("POST", "/api/update-install") => {
             crate::logging::runtime_log(
@@ -470,11 +470,11 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
                 "api:system",
                 "Guncelleme paketi kuruluyor",
             );
-            system::update_install_endpoint(body)
+            update::update_install_endpoint(body)
         }
-        ("POST", "/api/open-url") => system::open_url_endpoint(body),
-        ("POST", "/api/pick-file") => system::pick_path_endpoint(false),
-        ("POST", "/api/pick-folder") => system::pick_path_endpoint(true),
+        ("POST", "/api/open-url") => desktop::open_url_endpoint(body),
+        ("POST", "/api/pick-file") => desktop::pick_path_endpoint(false),
+        ("POST", "/api/pick-folder") => desktop::pick_path_endpoint(true),
         _ => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Warn,

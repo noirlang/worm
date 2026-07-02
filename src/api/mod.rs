@@ -1,13 +1,18 @@
 //! HTTP API modüllerini ve ortak API yardımcılarını dışarı açar.
 pub mod android;
+pub mod desktop;
+pub mod developer;
 pub mod evidence;
 mod helpers;
 mod jobs;
 mod mount;
 pub mod ram;
+mod ram_tools;
 mod router;
+pub mod settings;
 mod state;
 pub mod system;
+pub mod update;
 pub mod wireguard;
 
 #[cfg(target_os = "linux")]
