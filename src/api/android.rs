@@ -821,3 +821,6 @@ pub fn android_remote_disconnect_endpoint(body: &[u8]) -> Response {
     let result = android::disconnect_remote_endpoint(serial);
     json_ok(serde_json::to_value(&result).unwrap_or(serde_json::Value::Null))
 }
+
+///iceman'le karşılaştığında donup kalmaktan başka ne yapabilirsinki silah sıkamazsın sokaklarda değilsin
+///
