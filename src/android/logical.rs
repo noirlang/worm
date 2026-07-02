@@ -277,30 +277,100 @@ const ANDROID_APP_TARGETS: &[AndroidAppTarget] = &[
     AndroidAppTarget {
         platform: "Papara",
         package: "com.mobillium.papara",
-        category: "finance_tr",
+        category: "finance_wallet_tr",
         priority: "turkey_high",
-        storage_hint: "Finans oturumları private storage ve donanım güvenliğiyle korunur; non-root sadece paket/usage/bildirim izi verir.",
+        storage_hint: "Elektronik para/finans oturumu private storage tarafındadır; non-root sadece paket, usage ve bildirim izi verir.",
     },
     AndroidAppTarget {
         platform: "Ziraat Mobil",
         package: "com.ziraat.ziraatmobil",
-        category: "finance_tr",
+        category: "banking_tr",
         priority: "turkey_high",
         storage_hint: "Banka verisi private storage tarafındadır; non-root sadece paket, usage ve bildirim metaverisi raporlanır.",
     },
     AndroidAppTarget {
         platform: "Garanti BBVA",
         package: "com.garanti.cepsubesi",
-        category: "finance_tr",
+        category: "banking_tr",
         priority: "turkey_high",
         storage_hint: "Banka uygulaması private storage kullanır; iç veri erişimi root/yasal yetki gerektirir.",
     },
     AndroidAppTarget {
-        platform: "Enpara",
-        package: "finansbank.enpara",
-        category: "finance_tr",
+        platform: "İşCep",
+        package: "com.pozitron.iscep",
+        category: "banking_tr",
+        priority: "turkey_high",
+        storage_hint: "İş Bankası mobil bankacılık verisi private storage tarafındadır; non-root paket, usage ve bildirim izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "Akbank Mobil",
+        package: "com.akbank.android.apps.akbank_direkt",
+        category: "banking_tr",
+        priority: "turkey_high",
+        storage_hint: "Akbank mobil bankacılık oturumu private storage tarafındadır; non-root sadece paket/usage/bildirim izi verir.",
+    },
+    AndroidAppTarget {
+        platform: "Yapı Kredi Mobil",
+        package: "com.ykb.android",
+        category: "banking_tr",
+        priority: "turkey_high",
+        storage_hint: "Yapı Kredi mobil bankacılık verisi private storage tarafındadır; non-root kullanım ve bildirim izleri kontrol edilir.",
+    },
+    AndroidAppTarget {
+        platform: "VakıfBank Mobil",
+        package: "com.vakifbank.mobile",
+        category: "banking_tr",
+        priority: "turkey_high",
+        storage_hint: "VakıfBank mobil bankacılık verisi private storage tarafındadır; non-root paket/usage/bildirim izi verir.",
+    },
+    AndroidAppTarget {
+        platform: "Halkbank Mobil",
+        package: "com.tmobtech.halkbank",
+        category: "banking_tr",
+        priority: "turkey_high",
+        storage_hint: "Halkbank mobil bankacılık verisi private storage tarafındadır; non-root kullanım ve bildirim izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "QNB Mobil",
+        package: "com.finansbank.mobile.cepsube",
+        category: "banking_tr",
+        priority: "turkey_high",
+        storage_hint: "QNB mobil bankacılık verisi private storage tarafındadır; non-root paket, usage ve bildirim metaverisi raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "MobilDeniz",
+        package: "com.denizbank.mobildeniz",
+        category: "banking_tr",
+        priority: "turkey_high",
+        storage_hint: "DenizBank mobil bankacılık verisi private storage tarafındadır; non-root kullanım ve bildirim izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "Kuveyt Türk Mobil",
+        package: "com.kuveytturk.mobil",
+        category: "banking_tr",
         priority: "turkey_medium",
-        storage_hint: "Finans oturumu private storage tarafındadır; non-root kullanım ve bildirim izleri kontrol edilir.",
+        storage_hint: "Kuveyt Türk mobil bankacılık verisi private storage tarafındadır; non-root paket/usage/bildirim izi verir.",
+    },
+    AndroidAppTarget {
+        platform: "ING Mobil",
+        package: "com.ingbanktr.ingmobil",
+        category: "banking_tr",
+        priority: "turkey_medium",
+        storage_hint: "ING mobil bankacılık verisi private storage tarafındadır; non-root kullanım ve bildirim izleri raporlanır.",
+    },
+    AndroidAppTarget {
+        platform: "CEPTETEB",
+        package: "com.teb",
+        category: "banking_tr",
+        priority: "turkey_medium",
+        storage_hint: "TEB mobil bankacılık verisi private storage tarafındadır; non-root paket/usage/bildirim izi verir.",
+    },
+    AndroidAppTarget {
+        platform: "HSBC Turkey",
+        package: "tr.com.hsbc.hsbcturkey",
+        category: "banking_tr",
+        priority: "turkey_medium",
+        storage_hint: "HSBC Turkey mobil bankacılık verisi private storage tarafındadır; non-root kullanım ve bildirim izleri raporlanır.",
     },
     AndroidAppTarget {
         platform: "Turkish Airlines",
@@ -2119,6 +2189,10 @@ mod tests {
         assert!(packages.contains(&"com.getir"));
         assert!(packages.contains(&"com.sahibinden"));
         assert!(packages.contains(&"com.inomera.sm"));
+        assert!(packages.contains(&"com.pozitron.iscep"));
+        assert!(packages.contains(&"com.akbank.android.apps.akbank_direkt"));
+        assert!(packages.contains(&"com.ykb.android"));
+        assert!(packages.contains(&"com.tmobtech.halkbank"));
     }
 
     #[test]
