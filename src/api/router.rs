@@ -90,6 +90,20 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
                 }
             }
         }
+        ("POST", "/api/android-adb-install") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:android",
+                "ADB otomatik kurulumu baslatiliyor",
+            );
+            match crate::android::install_adb() {
+                Ok(result) => match serde_json::to_value(result) {
+                    Ok(value) => json_ok(value),
+                    Err(err) => json_error(500, err.to_string()),
+                },
+                Err(err) => json_error(500, crate::android::explain_android_error(err)),
+            }
+        }
         ("GET", "/api/android-devices") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Info,

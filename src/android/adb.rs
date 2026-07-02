@@ -13,6 +13,19 @@ pub struct AdbStatus {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+/// ADB kurulum komutunun sonucunu ve kurulum sonrası durumu taşır.
+pub struct AdbInstallResult {
+    pub installed: bool,
+    pub package_manager: String,
+    pub command: String,
+    pub status_code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+    pub message: String,
+    pub status: AdbStatus,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 /// adb devices -l çıktısından ayrıştırılan tek Android cihazı temsil eder.
 pub struct AndroidDevice {
@@ -104,6 +117,85 @@ pub fn adb_status() -> AdbStatus {
     }
 }
 
+/// Platform paket yöneticisini kullanarak ADB kurulumu yapar.
+pub fn install_adb() -> Result<AdbInstallResult, String> {
+    let before = adb_status();
+    if before.installed {
+        return Ok(AdbInstallResult {
+            installed: true,
+            package_manager: "already-installed".to_string(),
+            command: "adb version".to_string(),
+            status_code: Some(0),
+            stdout: String::new(),
+            stderr: String::new(),
+            message: before.message.clone(),
+            status: before,
+        });
+    }
+
+    let command = adb_install_command()?;
+    crate::logging::runtime_log(
+        crate::logging::LogLevel::Info,
+        "android:adb:install",
+        format!("ADB kurulum komutu baslatiliyor: {}", command.display()),
+    );
+
+    let output = Command::new(&command.program)
+        .args(&command.args)
+        .output()
+        .map_err(|err| format!("ADB kurulum komutu başlatılamadı: {err}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if !output.status.success() {
+        crate::logging::runtime_log(
+            crate::logging::LogLevel::Error,
+            "android:adb:install",
+            format!(
+                "ADB kurulum komutu basarisiz: {} | stdout={} | stderr={}",
+                command.display(),
+                stdout,
+                stderr
+            ),
+        );
+        return Err(format!(
+            "ADB kurulamadı.\nKomut: {}\nÇıkış kodu: {:?}\nstdout: {}\nstderr: {}",
+            command.display(),
+            output.status.code(),
+            if stdout.is_empty() { "-" } else { &stdout },
+            if stderr.is_empty() { "-" } else { &stderr },
+        ));
+    }
+
+    let status = adb_status();
+    if !status.installed {
+        return Err(format!(
+            "Paket yöneticisi başarı döndürdü ama ADB hâlâ PATH içinde görünmüyor.\nKomut: {}\nstdout: {}\nstderr: {}\nÇözüm: Uygulamayı yeniden başlatın veya adb binary yolunu PATH içine ekleyin.",
+            command.display(),
+            if stdout.is_empty() { "-" } else { &stdout },
+            if stderr.is_empty() { "-" } else { &stderr },
+        ));
+    }
+
+    crate::logging::runtime_log(
+        crate::logging::LogLevel::Info,
+        "android:adb:install",
+        format!("ADB kuruldu: {}", status.message),
+    );
+    let command_display = command.display();
+
+    Ok(AdbInstallResult {
+        installed: true,
+        package_manager: command.manager,
+        command: command_display,
+        status_code: output.status.code(),
+        stdout,
+        stderr,
+        message: status.message.clone(),
+        status,
+    })
+}
+
 /// Bağlı Android cihazlarını adb devices -l ile listeler.
 pub fn list_devices() -> Result<Vec<AndroidDevice>, String> {
     crate::logging::runtime_log(
@@ -154,6 +246,176 @@ pub fn list_devices() -> Result<Vec<AndroidDevice>, String> {
         ),
     );
     Ok(devices)
+}
+
+#[derive(Debug, Clone)]
+struct InstallCommand {
+    manager: String,
+    program: String,
+    args: Vec<String>,
+}
+
+impl InstallCommand {
+    fn display(&self) -> String {
+        std::iter::once(self.program.as_str())
+            .chain(self.args.iter().map(String::as_str))
+            .map(shell_display_arg)
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+fn adb_install_command() -> Result<InstallCommand, String> {
+    #[cfg(windows)]
+    {
+        if command_path("winget").is_none() {
+            return Err(
+                "winget bulunamadı. Windows App Installer kurulu olmalı veya Microsoft Store üzerinden güncellenmeli."
+                    .to_string(),
+            );
+        }
+        return Ok(InstallCommand {
+            manager: "winget".to_string(),
+            program: "winget".to_string(),
+            args: vec![
+                "install".to_string(),
+                "--id".to_string(),
+                "Google.PlatformTools".to_string(),
+                "--exact".to_string(),
+                "--accept-source-agreements".to_string(),
+                "--accept-package-agreements".to_string(),
+            ],
+        });
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let base = linux_adb_install_base_command()?;
+        return Ok(elevate_linux_install_command(base));
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        Err("ADB otomatik kurulumu bu platformda desteklenmiyor.".to_string())
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_adb_install_base_command() -> Result<InstallCommand, String> {
+    if command_path("pacman").is_some() {
+        return Ok(InstallCommand {
+            manager: "pacman".to_string(),
+            program: "pacman".to_string(),
+            args: vec![
+                "-S".to_string(),
+                "--needed".to_string(),
+                "--noconfirm".to_string(),
+                "android-tools".to_string(),
+            ],
+        });
+    }
+    if command_path("apt-get").is_some() {
+        return Ok(InstallCommand {
+            manager: "apt-get".to_string(),
+            program: "apt-get".to_string(),
+            args: vec![
+                "install".to_string(),
+                "-y".to_string(),
+                "android-tools-adb".to_string(),
+                "android-sdk-platform-tools-common".to_string(),
+            ],
+        });
+    }
+    if command_path("dnf").is_some() {
+        return Ok(InstallCommand {
+            manager: "dnf".to_string(),
+            program: "dnf".to_string(),
+            args: vec![
+                "install".to_string(),
+                "-y".to_string(),
+                "android-tools".to_string(),
+            ],
+        });
+    }
+    if command_path("yum").is_some() {
+        return Ok(InstallCommand {
+            manager: "yum".to_string(),
+            program: "yum".to_string(),
+            args: vec![
+                "install".to_string(),
+                "-y".to_string(),
+                "android-tools".to_string(),
+            ],
+        });
+    }
+    if command_path("zypper").is_some() {
+        return Ok(InstallCommand {
+            manager: "zypper".to_string(),
+            program: "zypper".to_string(),
+            args: vec![
+                "--non-interactive".to_string(),
+                "install".to_string(),
+                "android-tools".to_string(),
+            ],
+        });
+    }
+    if command_path("apk").is_some() {
+        return Ok(InstallCommand {
+            manager: "apk".to_string(),
+            program: "apk".to_string(),
+            args: vec!["add".to_string(), "android-tools".to_string()],
+        });
+    }
+
+    Err("Desteklenen paket yöneticisi bulunamadı. Arch/pacman, Debian/apt-get, Fedora/dnf, RHEL/yum, openSUSE/zypper veya Alpine/apk gerekli.".to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn elevate_linux_install_command(base: InstallCommand) -> InstallCommand {
+    if is_effective_root() {
+        return base;
+    }
+    if command_path("pkexec").is_some() {
+        let mut args = Vec::with_capacity(base.args.len() + 1);
+        args.push(base.program);
+        args.extend(base.args);
+        return InstallCommand {
+            manager: format!("pkexec+{}", base.manager),
+            program: "pkexec".to_string(),
+            args,
+        };
+    }
+    if command_path("sudo").is_some() {
+        let mut args = Vec::with_capacity(base.args.len() + 1);
+        args.push(base.program);
+        args.extend(base.args);
+        return InstallCommand {
+            manager: format!("sudo+{}", base.manager),
+            program: "sudo".to_string(),
+            args,
+        };
+    }
+    InstallCommand {
+        manager: base.manager,
+        program: base.program,
+        args: base.args,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn is_effective_root() -> bool {
+    Command::new("id")
+        .arg("-u")
+        .output()
+        .ok()
+        .and_then(|output| {
+            output
+                .status
+                .success()
+                .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        })
+        .as_deref()
+        == Some("0")
 }
 
 fn run_adb_devices_output() -> Result<std::process::Output, String> {
@@ -369,6 +631,17 @@ pub(super) fn first_non_empty(value: &str) -> Option<String> {
         .map(str::trim)
         .find(|line| !line.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn shell_display_arg(value: &str) -> String {
+    if value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':' | '+'))
+    {
+        value.to_string()
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
 }
 
 /// adb devices çıktısını cihaz listesine çevirir.

@@ -61,6 +61,7 @@ export function androidModePage({ modeId, t, icon, pageTitle, state, escapeHtml,
           </div>
           <div class="button-row" style="margin-top:12px">
             <button class="primary-button" data-action="android-adb-check">${icon("android")} ${t("android.adb.check")}</button>
+            ${installed ? "" : `<button class="secondary-button" data-action="android-adb-install">${icon("download")} ${t("android.adb.install")}</button>`}
             ${installed ? `<button class="secondary-button" data-action="android-list-devices">${icon("refresh")} ${t("android.devices.list")}</button>` : ""}
           </div>
 
@@ -384,6 +385,10 @@ export async function handleAndroidAction(button, deps) {
     await checkAdb(button, deps);
     return true;
   }
+  if (action === "android-adb-install") {
+    await installAdb(button, deps);
+    return true;
+  }
   if (action === "android-list-devices") {
     await listDevices(button, deps);
     return true;
@@ -487,6 +492,34 @@ async function checkAdb(button, { apiRequest, backendReady, state, t, showToast,
     showToast(status.installed ? t("android.adb.installed") : t("android.adb.missing"), status.installed ? "success" : "error");
   } catch (error) {
     showToast(t("android.adb.checkFailed", { message: error.message }), "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function installAdb(button, { apiRequest, backendReady, state, t, showToast, render }) {
+  if (!backendReady()) {
+    showToast(t("android.appModeRequired"), "warning");
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    showToast(t("android.adb.installing"), "info");
+    const result = await apiRequest("/api/android-adb-install", { method: "POST", body: "{}" });
+    if (!state.android) state.android = {};
+    state.android.adbStatus = result.status || {
+      installed: Boolean(result.installed),
+      message: result.message || t("android.adb.installed")
+    };
+    if (!state.android.adbStatus.installed) {
+      state.android.devices = [];
+      state.android.selectedDevice = "";
+    }
+    render();
+    showToast(t("android.adb.installDone"), "success");
+  } catch (error) {
+    showToast(t("android.adb.installFailed", { message: error.message }), "error");
   } finally {
     button.disabled = false;
   }

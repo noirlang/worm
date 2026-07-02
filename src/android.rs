@@ -12,7 +12,7 @@ mod ram;
 mod remote;
 mod session;
 
-pub use adb::{AdbStatus, AndroidDevice, adb_status, list_devices};
+pub use adb::{AdbInstallResult, AdbStatus, AndroidDevice, adb_status, install_adb, list_devices};
 pub use capability::{
     AndroidCapabilityCheck, AndroidCapabilityLevel, AndroidCapabilityReport,
     build_android_capability_report,
