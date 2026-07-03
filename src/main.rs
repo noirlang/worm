@@ -44,6 +44,7 @@ fn main() {
         Some("ram-carve") => ram_carve_command(args.collect()),
         Some("ram-processes") => ram_processes_command(args.collect()),
         Some("adb-status") | Some("android-adb-status") => android_adb_status_command(),
+        Some("adb-install") | Some("android-adb-install") => android_adb_install_command(),
         Some("android-devices") => android_devices_command(),
         Some("android-profile") => android_profile_command(args.collect()),
         Some("android-logical") => android_logical_command(args.collect()),
@@ -203,6 +204,7 @@ fn print_help() {
            remote-image <ip> <port> <disk_id> <cikti_klasoru> [token]\n\
            remote-ram <ip> <port> <vaka> [token]   Uzak agent RAM imaji al\n\
            adb-status                              ADB kurulumunu kontrol et\n\
+           adb-install                             ADB'yi sistem paket yöneticisiyle kur\n\
            android-devices                         Android cihazlarini listele\n\
            android-profile <serial>                Android cihaz profilini yazdir\n\
            android-logical <serial> <vaka> [quick|full|root|volatile]\n\
@@ -442,6 +444,13 @@ fn ram_processes_command(args: Vec<String>) -> Result<(), String> {
 /// ADB kurulum durumunu JSON olarak yazar.
 fn android_adb_status_command() -> Result<(), String> {
     print_json(&android::adb_status())
+}
+
+/// ADB'yi uygun paket yöneticisiyle kurmayı dener.
+fn android_adb_install_command() -> Result<(), String> {
+    let result = android::install_adb()
+        .map_err(|err| crate_diagnostic(android::explain_android_error(err)))?;
+    print_json(&result)
 }
 
 /// ADB ile bağlı Android cihazlarını listeler.
