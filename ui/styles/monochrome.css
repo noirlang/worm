@@ -1,0 +1,677 @@
+/* Monochrome UI refresh */
+.shell,
+.sidebar,
+.topbar,
+.view,
+.native-webview body {
+  background: var(--bg) !important;
+  background-image: none !important;
+}
+
+.view::before,
+.hero::after,
+.action-tile::after,
+.forensic-card::after {
+  display: none !important;
+}
+
+.hero,
+.amele-art,
+.action-tile,
+.forensic-card,
+.workflow-panel,
+.side-panel,
+.status-strip,
+.doc-card,
+.settings-card,
+.tree-panel,
+.preview-panel,
+.about-hero,
+.contributor-card,
+.company-logo-card,
+.ram-stat-card,
+.carved-card,
+.modal-content {
+  background: var(--panel) !important;
+  background-image: none !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+
+.theme-light .amele-art {
+  background: #111111 !important;
+  border-color: rgba(0, 0, 0, 0.16) !important;
+  --ring-fill: #111111;
+}
+
+.action-tile:hover,
+.forensic-card:hover,
+.nav-item:hover,
+.nav-item.active,
+.top-action:hover,
+.top-action.active,
+.icon-button:hover,
+.tree-node:hover,
+.tree-node.active,
+.proc-row:hover,
+.proc-row.active,
+.settings-meta span,
+.status-badge,
+.vpn-panel {
+  background: var(--panel-soft) !important;
+  background-image: none !important;
+  border-color: var(--line-strong) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+.nav-item.active::before,
+.pulse,
+.progress-bar span,
+.spark {
+  background: var(--text) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.tile-icon,
+.card-icon,
+.metric-icon,
+.ram-stat-card .card-icon {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  filter: none !important;
+}
+
+.about-logo {
+  background: var(--bg-2) !important;
+  background-image: none !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+
+.primary-button {
+  background: var(--text) !important;
+  background-image: none !important;
+  color: var(--bg) !important;
+  border: 1px solid var(--text) !important;
+  box-shadow: none !important;
+}
+
+.secondary-button,
+.danger-button,
+.icon-button,
+.top-action {
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: none !important;
+}
+
+.secondary-button:hover,
+.danger-button:hover,
+.icon-button:hover,
+.top-action:hover {
+  background: var(--panel-soft) !important;
+  border-color: var(--line-strong) !important;
+}
+
+.input,
+.select,
+.textarea,
+.log-box,
+.code-box,
+.hash-result,
+.analysis-tabs,
+.text-viewer-area,
+.hex-viewer-area,
+.maps-pre-box,
+.process-list-container {
+  background: var(--bg-2) !important;
+  color: var(--text) !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--text) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 14%, transparent) !important;
+}
+
+.section-label,
+.settings-kicker,
+.eyebrow,
+.platform-note strong,
+.proc-row.active strong,
+.string-match-item .match-meta span strong,
+code {
+  color: var(--text) !important;
+}
+
+.progress-bar {
+  background: var(--bg-2) !important;
+  border-color: var(--line-strong) !important;
+  box-shadow: none !important;
+}
+
+.switch {
+  background: var(--bg-2) !important;
+  border-color: var(--line-strong) !important;
+}
+
+.switch::after {
+  background: var(--muted) !important;
+}
+
+.switch.on {
+  background: var(--text) !important;
+}
+
+.switch.on::after {
+  background: var(--bg) !important;
+}
+
+.toast {
+  background: var(--panel-strong) !important;
+  color: var(--text) !important;
+  border-color: var(--line-strong) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.toast[data-type="error"] {
+  color: var(--red) !important;
+  border-color: color-mix(in srgb, var(--red) 72%, transparent) !important;
+}
+
+.toast[data-type="warning"] {
+  color: var(--amber) !important;
+  border-color: color-mix(in srgb, var(--amber) 72%, transparent) !important;
+}
+
+:root {
+  --glow-idle: rgba(255, 255, 255, 0.35);
+  --glow-idle-soft: rgba(255, 255, 255, 0.10);
+  --glow-hover: rgba(255, 236, 180, 0.92);
+  --glow-hover-soft: rgba(255, 228, 160, 0.30);
+  --glow-hover-glow: rgba(255, 225, 150, 0.18);
+  --glow-track: rgba(255, 255, 255, 0.06);
+}
+
+.shell.theme-light {
+  --glow-idle: rgba(38, 33, 24, 0.12);
+  --glow-idle-soft: rgba(38, 33, 24, 0.04);
+  --glow-hover: rgba(138, 94, 18, 0.60);
+  --glow-hover-soft: rgba(138, 94, 18, 0.18);
+  --glow-hover-glow: rgba(138, 94, 18, 0.08);
+  --glow-track: rgba(38, 33, 24, 0.06);
+}
+
+/* ── Rotating border-light keyframe ────────────────────────────── */
+
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes glow-spin {
+  to { --glow-angle: 360deg; }
+}
+
+/* ── Shared glow container setup ───────────────────────────────── */
+
+.action-tile,
+.forensic-card,
+.workflow-panel,
+.side-panel,
+.status-strip,
+.doc-card,
+.settings-card,
+.tree-panel,
+.preview-panel,
+.about-hero,
+.amele-art,
+.contributor-card,
+.company-logo-card,
+.ram-stat-card,
+.carved-card,
+.modal-content,
+.status-badge,
+.primary-button,
+.secondary-button,
+.danger-button,
+.icon-button,
+.top-action,
+.input,
+.select,
+.textarea {
+  isolation: isolate;
+  position: relative;
+  transition:
+    border-color 260ms var(--ease),
+    box-shadow 260ms var(--ease),
+    background-color 260ms var(--ease),
+    color 260ms var(--ease),
+    transform 260ms var(--ease);
+}
+
+/* ── Rotating light beam – panels & cards (integrated 1px border) ── */
+
+.action-tile::before,
+.forensic-card::before,
+.workflow-panel::before,
+.side-panel::before,
+.status-strip::before,
+.doc-card::before,
+.settings-card::before,
+.tree-panel::before,
+.preview-panel::before,
+.about-hero::before,
+.amele-art::before,
+.contributor-card::before,
+.company-logo-card::before,
+.ram-stat-card::before,
+.carved-card::before,
+.modal-content::before,
+.status-badge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: 
+    conic-gradient(
+      from var(--glow-angle),
+      transparent 0%,
+      transparent 32%,
+      var(--glow-idle) 39%,
+      var(--glow-idle-soft) 43%,
+      transparent 50%,
+      transparent 100%
+    ),
+    var(--glow-track);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: glow-spin 3.6s linear infinite;
+  opacity: 0.65;
+  transition: opacity 220ms var(--ease), background 220ms var(--ease);
+  will-change: --glow-angle;
+}
+
+/* ── Rotating light beam – buttons (no overflow:hidden) ────────── */
+
+.primary-button::before,
+.secondary-button::before,
+.danger-button::before,
+.icon-button::before,
+.top-action::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--glow-angle),
+    transparent 0%,
+    transparent 30%,
+    var(--glow-idle) 38%,
+    var(--glow-idle-soft) 42%,
+    transparent 50%,
+    transparent 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: glow-spin 3.2s linear infinite;
+  opacity: 0.55;
+  transition: opacity 220ms var(--ease);
+  will-change: --glow-angle;
+}
+
+/* ── Disable ::after (clean up old system) ─────────────────────── */
+
+.action-tile::after,
+.forensic-card::after,
+.workflow-panel::after,
+.side-panel::after,
+.status-strip::after,
+.doc-card::after,
+.settings-card::after,
+.tree-panel::after,
+.preview-panel::after,
+.about-hero::after,
+.amele-art::after,
+.contributor-card::after,
+.company-logo-card::after,
+.ram-stat-card::after,
+.carved-card::after,
+.modal-content::after,
+.status-badge::after {
+  display: none !important;
+}
+
+/* ── Z-index for content above the glow ────────────────────────── */
+
+.action-tile > *,
+.forensic-card > *,
+.workflow-panel > *,
+.side-panel > *,
+.status-strip > *,
+.doc-card > *,
+.settings-card > *,
+.tree-panel > *,
+.preview-panel > *,
+.about-hero > *,
+.amele-art > *,
+.contributor-card > *,
+.company-logo-card > *,
+.ram-stat-card > *,
+.carved-card > *,
+.modal-content > *,
+.status-badge > * {
+  position: relative;
+  z-index: 3;
+}
+
+/* ── HOVER: cream LED glow (panels) ────────────────────────────── */
+
+.action-tile:hover::before,
+.forensic-card:hover::before,
+.workflow-panel:hover::before,
+.side-panel:hover::before,
+.status-strip:hover::before,
+.doc-card:hover::before,
+.settings-card:hover::before,
+.tree-panel:hover::before,
+.preview-panel:hover::before,
+.about-hero:hover::before,
+.amele-art:hover::before,
+.contributor-card:hover::before,
+.company-logo-card:hover::before,
+.ram-stat-card:hover::before,
+.carved-card:hover::before,
+.modal-content:hover::before,
+.status-badge:hover::before,
+.action-tile:focus-visible::before,
+.forensic-card:focus-visible::before {
+  background: 
+    conic-gradient(
+      from var(--glow-angle),
+      transparent 0%,
+      transparent 25%,
+      var(--glow-hover) 35%,
+      var(--glow-hover-soft) 45%,
+      transparent 55%,
+      transparent 100%
+    ),
+    rgba(255, 236, 180, 0.14);
+  opacity: 1;
+  animation: glow-spin 2.2s linear infinite;
+}
+
+.action-tile:hover,
+.forensic-card:hover,
+.workflow-panel:hover,
+.side-panel:hover,
+.status-strip:hover,
+.doc-card:hover,
+.settings-card:hover,
+.tree-panel:hover,
+.preview-panel:hover,
+.about-hero:hover,
+.amele-art:hover,
+.contributor-card:hover,
+.company-logo-card:hover,
+.ram-stat-card:hover,
+.carved-card:hover,
+.modal-content:hover,
+.status-badge:hover {
+  box-shadow: 0 0 24px var(--glow-hover-glow) !important;
+}
+
+/* ── HOVER: cream LED glow (buttons) ───────────────────────────── */
+
+.primary-button:hover::before,
+.secondary-button:hover::before,
+.danger-button:hover::before,
+.icon-button:hover::before,
+.top-action:hover::before {
+  background: conic-gradient(
+    from var(--glow-angle),
+    transparent 0%,
+    transparent 25%,
+    var(--glow-hover) 35%,
+    var(--glow-hover-soft) 45%,
+    transparent 55%,
+    transparent 100%
+  );
+  opacity: 1;
+  animation: glow-spin 1.8s linear infinite;
+}
+
+.primary-button:hover,
+.secondary-button:hover,
+.danger-button:hover,
+.icon-button:hover,
+.top-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px var(--glow-hover-glow) !important;
+}
+
+/* ── HOVER: cream LED glow (inputs) ────────────────────────────── */
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--glow-hover) !important;
+  box-shadow: 0 0 14px var(--glow-hover-glow) !important;
+}
+
+/* ── Focus visible glow for buttons ────────────────────────────── */
+
+.primary-button:focus-visible::before,
+.secondary-button:focus-visible::before,
+.danger-button:focus-visible::before {
+  background: conic-gradient(
+    from var(--glow-angle),
+    transparent 0%,
+    transparent 25%,
+    var(--glow-hover) 35%,
+    var(--glow-hover-soft) 45%,
+    transparent 55%,
+    transparent 100%
+  );
+  opacity: 1;
+  animation: glow-spin 1.8s linear infinite;
+}
+
+/* WebKitGTK struggles with constantly animated masked conic gradients.
+   Keep the native Linux window visually close, but avoid idle repaint loops. */
+.native-linux .action-tile,
+.native-linux .forensic-card,
+.native-linux .workflow-panel,
+.native-linux .side-panel,
+.native-linux .status-strip,
+.native-linux .doc-card,
+.native-linux .settings-card,
+.native-linux .tree-panel,
+.native-linux .preview-panel,
+.native-linux .about-hero,
+.native-linux .amele-art,
+.native-linux .contributor-card,
+.native-linux .company-logo-card,
+.native-linux .ram-stat-card,
+.native-linux .carved-card,
+.native-linux .modal-content,
+.native-linux .status-badge,
+.native-linux .primary-button,
+.native-linux .secondary-button,
+.native-linux .danger-button,
+.native-linux .icon-button,
+.native-linux .top-action,
+.native-linux .input,
+.native-linux .select,
+.native-linux .textarea {
+  box-shadow: none !important;
+  transition-duration: 120ms !important;
+}
+
+.native-linux .action-tile::before,
+.native-linux .forensic-card::before,
+.native-linux .workflow-panel::before,
+.native-linux .side-panel::before,
+.native-linux .status-strip::before,
+.native-linux .doc-card::before,
+.native-linux .settings-card::before,
+.native-linux .tree-panel::before,
+.native-linux .preview-panel::before,
+.native-linux .about-hero::before,
+.native-linux .amele-art::before,
+.native-linux .contributor-card::before,
+.native-linux .company-logo-card::before,
+.native-linux .ram-stat-card::before,
+.native-linux .carved-card::before,
+.native-linux .modal-content::before,
+.native-linux .status-badge::before,
+.native-linux .primary-button::before,
+.native-linux .secondary-button::before,
+.native-linux .danger-button::before,
+.native-linux .icon-button::before,
+.native-linux .top-action::before,
+.native-linux .nav-item::after {
+  animation: none !important;
+  opacity: 0.28 !important;
+  will-change: auto !important;
+}
+
+.native-linux .action-tile:hover::before,
+.native-linux .forensic-card:hover::before,
+.native-linux .workflow-panel:hover::before,
+.native-linux .side-panel:hover::before,
+.native-linux .status-strip:hover::before,
+.native-linux .doc-card:hover::before,
+.native-linux .settings-card:hover::before,
+.native-linux .tree-panel:hover::before,
+.native-linux .preview-panel:hover::before,
+.native-linux .about-hero:hover::before,
+.native-linux .amele-art:hover::before,
+.native-linux .contributor-card:hover::before,
+.native-linux .company-logo-card:hover::before,
+.native-linux .ram-stat-card:hover::before,
+.native-linux .carved-card:hover::before,
+.native-linux .modal-content:hover::before,
+.native-linux .status-badge:hover::before,
+.native-linux .primary-button:hover::before,
+.native-linux .secondary-button:hover::before,
+.native-linux .danger-button:hover::before,
+.native-linux .icon-button:hover::before,
+.native-linux .top-action:hover::before,
+.native-linux .nav-item:hover::after {
+  animation: glow-spin 2.8s linear infinite !important;
+  opacity: 0.85 !important;
+  will-change: --glow-angle !important;
+}
+
+.native-linux .topbar,
+.native-linux .toast,
+.native-linux .modal-overlay,
+.native-linux .monitor-brand {
+  backdrop-filter: none !important;
+}
+
+.native-linux .page {
+  animation: none !important;
+}
+
+.native-linux .spark {
+  filter: none !important;
+}
+
+.analysis-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.summary-grid > div {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
+}
+
+.summary-grid strong,
+.summary-grid span {
+  display: block;
+}
+
+.summary-grid strong {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.summary-grid span {
+  overflow-wrap: anywhere;
+}
+
+.status-pill {
+  display: inline-flex !important;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-pill.ok {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.status-pill.warn {
+  color: #ffe7b0;
+  border-color: rgba(255, 231, 176, 0.45);
+  background: rgba(255, 231, 176, 0.08);
+}
+
+.status-pill.danger {
+  color: #ffb4b4;
+  border-color: rgba(255, 95, 104, 0.5);
+  background: rgba(255, 95, 104, 0.08);
+}
+
