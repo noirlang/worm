@@ -1,7 +1,10 @@
 //! HTTP metod ve path değerlerini ilgili API endpoint fonksiyonlarına bağlar.
 use crate::server::{Response, json_error, json_ok};
 
-use super::{android, desktop, developer, evidence, ram, settings, system, update, wireguard};
+use super::{
+    acquisition_control, android, desktop, developer, evidence, hash_api, ram, settings, system,
+    update, wireguard,
+};
 
 /// API HTTP metod/path çiftini ilgili endpoint fonksiyonuna yönlendirir ve detaylıca loglar.
 pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
@@ -228,9 +231,11 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
                 "api:job",
                 "Edinim isi kontrol komutu alindi",
             );
-            ram::acquisition_control_endpoint(body)
+            acquisition_control::acquisition_control_endpoint(body)
         }
-        ("POST", "/api/acquisition-status") => ram::acquisition_status_endpoint(body),
+        ("POST", "/api/acquisition-status") => {
+            acquisition_control::acquisition_status_endpoint(body)
+        }
         ("POST", "/api/connect") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Info,
@@ -245,7 +250,7 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
                 "api:hash",
                 "Dosya hash hesaplama baslatildi",
             );
-            system::hash_endpoint(body)
+            hash_api::hash_endpoint(body)
         }
         ("POST", "/api/local-image") => {
             crate::logging::runtime_log(

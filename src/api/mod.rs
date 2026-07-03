@@ -1,8 +1,10 @@
 //! HTTP API modüllerini ve ortak API yardımcılarını dışarı açar.
+pub mod acquisition_control;
 pub mod android;
 pub mod desktop;
 pub mod developer;
 pub mod evidence;
+pub mod hash_api;
 mod helpers;
 mod jobs;
 mod mount;
