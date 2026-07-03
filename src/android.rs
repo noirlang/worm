@@ -1,5 +1,6 @@
 //! Android edinim, profil ve analiz alt modüllerini tek noktadan dışarı açar.
 mod adb;
+mod app_catalog;
 mod capability;
 mod errors;
 mod extractors;
