@@ -1,8 +1,10 @@
 import { androidModePage, androidPage, handleAndroidAction, syncAndroidDeviceSelection } from "./android.js";
 import { createApiRequest } from "./core/api.js";
-import { errorBoxHtml, normalizeErrorMessage } from "./core/errors.js";
+import { errorBoxHtml } from "./core/errors.js";
 import { detectPlatform, platformLabel as platformName } from "./core/platform.js";
+import { showToast } from "./core/toast.js";
 import { canonicalRamFileName, compactLogLine, escapeHtml, formatBytes } from "./core/utils.js";
+import { localText, toolCards, workflows } from "./core/workflows.js";
 import { icon, hydrateIcons, fontIcons } from "./icons.js";
 import { translate } from "./i18n.js";
 import { homePage, metric } from "./pages/home.js";
@@ -72,6 +74,7 @@ function t(key, vars = {}) {
 }
 
 const apiRequest = createApiRequest({ backendAvailable });
+const localizeText = (value) => localText(value, state.language);
 
 function boundDetailPanel(tab) {
   return detailPanel({
@@ -90,161 +93,6 @@ function boundDetailPanel(tab) {
 function boundPickerField(label, id, value, type = "file") {
   return pickerField(label, id, value, type, icon, t);
 }
-
-function L(tr, en) {
-  return { tr, en };
-}
-
-function localText(value) {
-  if (value && typeof value === "object" && "tr" in value) {
-    return value[state.language] || value.tr;
-  }
-  return value;
-}
-
-const toolCards = {
-  windows: [
-    {
-      id: "windows-remote-disk",
-      title: L("Uzak Disk İmajı", "Remote Disk Image"),
-      desc: L("Agent ile PhysicalDrive imajı alın.", "Acquire a PhysicalDrive image through the agent."),
-      icon: "disk",
-      accent: "var(--text)",
-      badge: "Agent + raw stream"
-    },
-    {
-      id: "windows-local-disk",
-      title: L("Yerel Disk İmajı", "Local Disk Image"),
-      desc: L("Bu makinedeki diskten ham imaj alın.", "Acquire a raw image from this machine."),
-      icon: "windows",
-      accent: "var(--text)",
-      badge: "PhysicalDrive"
-    },
-    {
-      id: "windows-remote-ram",
-      title: L("Uzak RAM", "Remote RAM"),
-      desc: L("WinPMEM ile RAM dump alın.", "Acquire a RAM dump with WinPMEM."),
-      icon: "ram",
-      accent: "var(--text)",
-      badge: "WinPMEM remote"
-    },
-    {
-      id: "windows-local-ram",
-      title: L("Yerel RAM", "Local RAM"),
-      desc: L("WinPMEM ile yerel RAM alın.", "Acquire local RAM with WinPMEM."),
-      icon: "chip",
-      accent: "var(--text)",
-      badge: L("Yönetici gerekli", "Admin required")
-    }
-  ],
-  linux: [
-    {
-      id: "linux-remote-disk",
-      title: L("Uzak Disk İmajı", "Remote Disk Image"),
-      desc: L("Agent ile /dev disk imajı alın.", "Acquire a /dev disk image through the agent."),
-      icon: "disk",
-      accent: "var(--text)",
-      badge: "Agent + /dev"
-    },
-    {
-      id: "linux-local-disk",
-      title: L("Yerel Disk İmajı", "Local Disk Image"),
-      desc: L("Root ile yerel disk imajı alın.", "Acquire a local disk image as root."),
-      icon: "linux",
-      accent: "var(--text)",
-      badge: "BLKGETSIZE64"
-    },
-    {
-      id: "linux-remote-ram",
-      title: L("Uzak RAM", "Remote RAM"),
-      desc: L("AVML ile RAM dump alın.", "Acquire a RAM dump with AVML."),
-      icon: "ram",
-      accent: "var(--text)",
-      badge: "AVML remote"
-    },
-    {
-      id: "linux-local-ram",
-      title: L("Yerel RAM", "Local RAM"),
-      desc: L("AVML ile yerel RAM alın.", "Acquire local RAM with AVML."),
-      icon: "chip",
-      accent: "var(--text)",
-      badge: L("Root gerekli", "Root required")
-    }
-  ]
-};
-
-const workflows = {
-  "windows-remote-disk": {
-    platform: "Windows",
-    icon: "windows",
-    title: L("Uzak Windows Sunucu Bağlantısı", "Remote Windows Server Connection"),
-    desc: L("Bağlanın, disk seçin, imaj alın.", "Connect, select a disk, acquire an image."),
-    mode: "remote-disk",
-    output: "/home/raodrin/Amele/Ciktilar",
-    diskLabel: L("Disk seçilmedi", "No disk selected")
-  },
-  "linux-remote-disk": {
-    platform: "Linux",
-    icon: "linux",
-    title: L("Uzak Linux Disk Bağlantısı", "Remote Linux Disk Connection"),
-    desc: L("Bağlanın, /dev disk seçin, imaj alın.", "Connect, select a /dev disk, acquire an image."),
-    mode: "remote-disk",
-    output: "/home/raodrin/Amele/Ciktilar",
-    diskLabel: L("Disk seçilmedi", "No disk selected")
-  },
-  "windows-local-disk": {
-    platform: "Windows",
-    icon: "windows",
-    title: L("Windows Yerel Disk İmajı", "Windows Local Disk Image"),
-    desc: L("PhysicalDrive seçin ve imaj alın.", "Select a PhysicalDrive and acquire an image."),
-    mode: "local-disk",
-    output: "C:\\Amele\\Ciktilar",
-    diskLabel: L("Disk seçilmedi", "No disk selected")
-  },
-  "linux-local-disk": {
-    platform: "Linux",
-    icon: "linux",
-    title: L("Linux Yerel Disk İmajı", "Linux Local Disk Image"),
-    desc: L("Blok cihaz seçin ve imaj alın.", "Select a block device and acquire an image."),
-    mode: "local-disk",
-    output: "/home/raodrin/Amele/Ciktilar",
-    diskLabel: L("Disk seçilmedi", "No disk selected")
-  },
-  "windows-remote-ram": {
-    platform: "Windows",
-    icon: "ram",
-    title: L("Windows Uzak RAM Edinimi", "Windows Remote RAM Acquisition"),
-    desc: L("WinPMEM kontrolü ve RAM dump indirme.", "Check WinPMEM and download the RAM dump."),
-    mode: "remote-ram",
-    output: "memory_dump.raw",
-    diskLabel: "WinPMEM"
-  },
-  "linux-remote-ram": {
-    platform: "Linux",
-    icon: "ram",
-    title: L("Linux Uzak RAM Edinimi", "Linux Remote RAM Acquisition"),
-    desc: L("AVML kontrolü ve RAM dump indirme.", "Check AVML and download the RAM dump."),
-    mode: "remote-ram",
-    output: "memory_dump_linux.raw",
-    diskLabel: "AVML"
-  },
-  "windows-local-ram": {
-    platform: "Windows",
-    icon: "chip",
-    title: L("Windows Yerel RAM Edinimi", "Windows Local RAM Acquisition"),
-    desc: L("WinPMEM kontrolü ve yerel RAM imajı.", "Check WinPMEM and acquire local RAM."),
-    mode: "local-ram",
-    output: "memory_dump_local.raw"
-  },
-  "linux-local-ram": {
-    platform: "Linux",
-    icon: "chip",
-    title: L("Linux Yerel RAM Edinimi", "Linux Local RAM Acquisition"),
-    desc: L("AVML kontrolü ve root ile RAM imajı.", "Check AVML and acquire RAM as root."),
-    mode: "local-ram",
-    output: "linux_memory_dump.raw"
-  }
-};
 
 function setRoute(route) {
   if (route.startsWith("workflow:")) {
@@ -353,7 +201,7 @@ function render() {
       state,
       t,
       icon,
-      localText,
+      localText: localizeText,
       canonicalRamFileName,
       caseSelectOptions,
       caseOutputLabel,
@@ -427,9 +275,9 @@ function toolHub(platform) {
         return `
         <button class="forensic-card ${blocked ? "is-disabled" : ""}" data-route="workflow:${card.id}" style="--accent:${card.accent}" ${blocked ? `aria-disabled="true" data-disabled-reason="${workflow.platform}"` : ""}>
           <span class="card-icon">${icon(card.icon)}</span>
-          <h3>${localText(card.title)}</h3>
-          <p>${localText(card.desc)}</p>
-          <span class="meta">${blocked ? t("localUnsupported") : localText(card.badge)}</span>
+          <h3>${localizeText(card.title)}</h3>
+          <p>${localizeText(card.desc)}</p>
+          <span class="meta">${blocked ? t("localUnsupported") : localizeText(card.badge)}</span>
         </button>
       `;
       }
@@ -1646,25 +1494,6 @@ async function handleAction(button) {
   const label = button.textContent.trim().replace(/\s+/g, " ");
   writeWorkflowLog(`${label}: ${t("ready")}`);
   showToast(`${label}: ${t("ready")}`);
-}
-
-function showToast(message, type = "success") {
-  let toast = document.querySelector(".toast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.className = "toast";
-    document.body.appendChild(toast);
-  }
-  const displayMessage = type === "error" ? normalizeErrorMessage(message) : String(message ?? "");
-  toast.textContent = displayMessage;
-  toast.title = displayMessage;
-  toast.dataset.type = type;
-  toast.classList.add("visible");
-  window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(
-    () => toast.classList.remove("visible"),
-    type === "error" ? Math.min(18000, 9000 + displayMessage.length * 18) : 3200
-  );
 }
 
 function renderErrorPanel(title, errorOrMessage) {
