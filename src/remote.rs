@@ -1,5 +1,6 @@
 //! Linux/Windows agent protokolüyle uzak disk ve RAM edinim bağlantılarını yönetir.
 use crate::error::{AmeleError, AmeleResult, HataKodu};
+use crate::output_format::AcquisitionOutputFormat;
 use crate::settings::DEFAULT_CHUNK_SIZE;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -158,6 +159,7 @@ impl RemoteConnection {
         disk_name: Option<&str>,
         target_dir: impl AsRef<Path>,
         job_id: Option<&str>,
+        format: AcquisitionOutputFormat,
         mut progress: F,
     ) -> AmeleResult<RemoteTransferResult>
     where
@@ -174,7 +176,7 @@ impl RemoteConnection {
         let mut request = json!({
             "komut": "imaj_baslat",
             "disk_id": disk_id,
-            "format": "raw",
+            "format": format.as_str(),
             "parca_boyutu": DEFAULT_CHUNK_SIZE,
         });
         if let Some(job_id) = job_id {
@@ -316,6 +318,7 @@ impl RemoteConnection {
         &mut self,
         output_file: &str,
         job_id: Option<&str>,
+        format: AcquisitionOutputFormat,
         mut progress: F,
     ) -> AmeleResult<RemoteRamResult>
     where
@@ -324,6 +327,7 @@ impl RemoteConnection {
         let mut request = json!({
             "komut": "ram_edinim_baslat",
             "cikti_dosya": output_file,
+            "format": format.as_str(),
         });
         if let Some(job_id) = job_id {
             request["is_id"] = Value::String(job_id.to_string());

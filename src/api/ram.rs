@@ -246,7 +246,7 @@ fn run_remote_ram_job(job_id: String, request: RemoteRamRequest) {
     match RemoteConnection::connect(&request.ip, request.port, request.token.clone()) {
         Ok(mut connection) => {
             let remote_job_id = job_id.clone();
-            match connection.start_remote_ram(&remote_file, Some(&remote_job_id), |done, total| {
+            match connection.start_remote_ram(&remote_file, Some(&remote_job_id), format, |done, total| {
                 update_acquisition_progress_message(&job_id, done, total, "RAM edinimi sürüyor");
             }) {
                 Ok(ram_result) => {

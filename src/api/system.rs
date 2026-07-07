@@ -529,6 +529,7 @@ fn run_remote_image_job(job_id: String, request: RemoteImageRequest) {
                 request.disk_name.as_deref(),
                 plan.working_path.parent().unwrap_or(output.as_path()),
                 Some(&remote_job_id),
+                format,
                 |done, total| update_acquisition_progress(&job_id, done, total),
             ) {
                 Ok(result) => {
