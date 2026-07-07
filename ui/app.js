@@ -29,6 +29,7 @@ if (isNativeLinux) document.documentElement.classList.add("native-linux");
 
 const app = document.querySelector("#app");
 const view = document.querySelector("#view");
+const profileGate = document.querySelector("#profile-gate");
 const preferredLanguage = localStorage.getItem("amele-language") || "tr";
 const requestedTheme = urlParams.get("theme");
 const preferredTheme = ["dark", "light"].includes(requestedTheme || "") ? requestedTheme : localStorage.getItem("amele-theme") || "dark";
@@ -52,6 +53,10 @@ const state = {
   pendingCaseName: "",
   cases: [],
   caseBaseDir: "",
+  profiles: [],
+  activeProfile: null,
+  profileGateVisible: false,
+  profileGateMode: "select",
   imageMount: null,
   imageMountLogHTML: "",
   imagePathInput: "",
@@ -130,6 +135,7 @@ function setLanguage(language) {
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
   });
+  syncProfileButton();
 }
 
 function syncBrandLogo() {
@@ -175,7 +181,169 @@ async function saveSettingsFromControls() {
     })
   });
   applyPersistedSettings(result.settings);
+  if (state.activeProfile) {
+    state.activeProfile.language = state.language;
+    state.activeProfile.theme = state.theme;
+    syncProfileButton();
+  }
   return result;
+}
+
+async function loadProfiles() {
+  if (!backendReady()) {
+    hideProfileGate();
+    return;
+  }
+  try {
+    const result = await apiRequest("/api/profiles");
+    state.profiles = Array.isArray(result.profiles) ? result.profiles : [];
+    state.activeProfile = result.active_profile || null;
+    if (state.activeProfile) {
+      setLanguage(state.activeProfile.language === "en" ? "en" : "tr");
+      setTheme(state.activeProfile.theme === "light" ? "light" : "dark");
+      hideProfileGate();
+    } else {
+      state.profileGateMode = state.profiles.length ? "select" : "create";
+      showProfileGate();
+    }
+    syncProfileButton();
+  } catch (error) {
+    devLog("ERROR", "ui:profile", `Profil listesi yüklenemedi: ${error.message}`, apiRequest, backendReady);
+    state.profileGateMode = "create";
+    showProfileGate(t("profile.loadFailed", { message: error.message }));
+  }
+}
+
+function showProfileGate(errorMessage = "") {
+  state.profileGateVisible = true;
+  renderProfileGate(errorMessage);
+}
+
+function hideProfileGate() {
+  state.profileGateVisible = false;
+  if (profileGate) {
+    profileGate.hidden = true;
+    profileGate.innerHTML = "";
+  }
+}
+
+function renderProfileGate(errorMessage = "") {
+  if (!profileGate) return;
+  profileGate.hidden = false;
+  const isCreate = state.profileGateMode === "create" || !state.profiles.length;
+  const cards = state.profiles.map((profile) => `
+    <button class="profile-card" data-action="profile-select" data-username="${escapeHtml(profile.username)}">
+      <span class="profile-avatar">${profileInitials(profile)}</span>
+      <strong>${escapeHtml(profile.full_name || profile.username)}</strong>
+      <small>@${escapeHtml(profile.username)}</small>
+    </button>
+  `).join("");
+  profileGate.innerHTML = `
+    <section class="profile-gate-card">
+      <div class="profile-gate-head">
+        <img src="./assets/logo/${state.theme === "light" ? "logo-siyah.png" : "logo.png"}" alt="Amele" />
+        <div>
+          <h1>${t(isCreate ? "profile.createTitle" : "profile.selectTitle")}</h1>
+          <p>${t(isCreate ? "profile.createDesc" : "profile.selectDesc")}</p>
+        </div>
+      </div>
+      ${errorMessage ? `<div class="error-panel">${escapeHtml(errorMessage)}</div>` : ""}
+      ${!isCreate ? `<div class="profile-list">${cards}</div>` : ""}
+      ${isCreate ? profileFormHtml() : `
+        <label class="check-row">
+          <input type="checkbox" id="profile-open-directly" />
+          <span>${t("profile.openDirectly")}</span>
+        </label>
+        <button class="secondary-button" data-action="profile-create-start">${icon("user")} ${t("profile.newProfile")}</button>
+      `}
+    </section>
+  `;
+  hydrateIcons(profileGate);
+}
+
+function profileFormHtml() {
+  return `
+    <div class="profile-form">
+      ${field(t("settings.language"), `
+        <select id="profile-language" class="select">
+          <option value="tr" ${state.language === "tr" ? "selected" : ""}>Türkçe</option>
+          <option value="en" ${state.language === "en" ? "selected" : ""}>English</option>
+        </select>
+      `)}
+      ${field(t("settings.darkTheme"), `
+        <select id="profile-theme" class="select">
+          <option value="dark" ${state.theme !== "light" ? "selected" : ""}>${t("profile.themeDark")}</option>
+          <option value="light" ${state.theme === "light" ? "selected" : ""}>${t("profile.themeLight")}</option>
+        </select>
+      `)}
+      ${field(t("profile.fullName"), `<input id="profile-full-name" class="input" autocomplete="name" />`)}
+      ${field(t("profile.username"), `<input id="profile-username" class="input" autocomplete="username" />`)}
+      <label class="check-row">
+        <input type="checkbox" id="profile-create-directly" />
+        <span>${t("profile.openDirectly")}</span>
+      </label>
+      <div class="button-row">
+        ${state.profiles.length ? `<button class="secondary-button" data-action="profile-select-back">${t("profile.backToProfiles")}</button>` : ""}
+        <button class="primary-button" data-action="profile-submit">${icon("user")} ${t("profile.createButton")}</button>
+      </div>
+    </div>
+  `;
+}
+
+function profileInitials(profile) {
+  const source = profile.full_name || profile.username || "A";
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toLocaleUpperCase(state.language === "tr" ? "tr-TR" : "en-US") || "")
+    .join("") || "A";
+}
+
+function syncProfileButton() {
+  const label = document.querySelector("[data-profile-label]");
+  if (label) label.textContent = state.activeProfile?.display_name || t("profile.button");
+}
+
+async function selectProfile(username) {
+  const openDirectly = Boolean(document.querySelector("#profile-open-directly")?.checked);
+  const result = await apiRequest("/api/profiles/select", {
+    method: "POST",
+    body: JSON.stringify({ username, open_directly: openDirectly })
+  });
+  state.activeProfile = result.profile;
+  setLanguage(state.activeProfile.language === "en" ? "en" : "tr");
+  setTheme(state.activeProfile.theme === "light" ? "light" : "dark");
+  hideProfileGate();
+  syncProfileButton();
+  await loadPersistedSettings();
+  await loadEvidenceCases();
+  render();
+}
+
+async function createProfileFromGate() {
+  const language = document.querySelector("#profile-language")?.value || state.language;
+  const theme = document.querySelector("#profile-theme")?.value || state.theme;
+  const fullName = document.querySelector("#profile-full-name")?.value.trim() || "";
+  const username = document.querySelector("#profile-username")?.value.trim() || "";
+  const openDirectly = Boolean(document.querySelector("#profile-create-directly")?.checked);
+  if (!fullName || !username) {
+    showToast(t("profile.required"), "error");
+    return;
+  }
+  const result = await apiRequest("/api/profiles/create", {
+    method: "POST",
+    body: JSON.stringify({ full_name: fullName, username, language, theme, open_directly: openDirectly })
+  });
+  state.profiles.push(result.profile);
+  state.activeProfile = result.profile;
+  setLanguage(result.profile.language === "en" ? "en" : "tr");
+  setTheme(result.profile.theme === "light" ? "light" : "dark");
+  hideProfileGate();
+  syncProfileButton();
+  await loadPersistedSettings();
+  await loadEvidenceCases();
+  render();
 }
 
 function render() {
@@ -247,6 +415,9 @@ function render() {
     loadEvidenceCases();
   }
   if (state.route === "analysis") {
+    loadEvidenceCases();
+  }
+  if (state.route === "profile") {
     loadEvidenceCases();
   }
   if (state.route.startsWith("workflow:")) {
@@ -336,10 +507,67 @@ const routes = {
   android: () => androidPage({ t, icon, pageTitle, state, escapeHtml, backendReady }),
   agent: agentPage,
   analysis: analysisPage,
+  profile: profilePage,
   other: otherPage,
   settings: settingsPage,
   about: aboutPage
 };
+
+function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
+  const profile = state.activeProfile;
+  const caseCards = state.cases.length
+    ? state.cases.map((item) => `
+        <article class="case-profile-card">
+          <strong>${escapeHtml(item.case_name || "-")}</strong>
+          <small>${escapeHtml(item.case_dir || "")}</small>
+          <span>${t("profile.caseCounts", {
+            images: String(item.output_count || 0),
+            ram: String(item.ram_count || 0),
+            android: String(item.android_count || 0)
+          })}</span>
+        </article>
+      `).join("")
+    : `<div class="log-box">${t("profile.noCases")}</div>`;
+
+  return `
+    <section class="page">
+      ${pageTitle(t("profile.title"), t("profile.desc"), "user", icon)}
+      <div class="settings-layout">
+        <article class="settings-card settings-primary">
+          <span class="settings-kicker">${t("profile.account")}</span>
+          <div class="profile-summary">
+            <span class="profile-avatar large">${profile ? profileInitials(profile) : "A"}</span>
+            <div>
+              <h3>${escapeHtml(profile?.full_name || t("profile.noActive"))}</h3>
+              <p>@${escapeHtml(profile?.username || "-")}</p>
+            </div>
+          </div>
+          <div class="settings-row">
+            <strong>${t("settings.language")}</strong>
+            <span>${profile?.language === "en" ? "English" : "Türkçe"}</span>
+          </div>
+          <div class="settings-row">
+            <strong>${t("settings.darkTheme")}</strong>
+            <span>${profile?.theme === "light" ? t("profile.themeLight") : t("profile.themeDark")}</span>
+          </div>
+          <div class="settings-row">
+            <strong>${t("case.location")}</strong>
+            <small>${escapeHtml(state.caseBaseDir || "~/Amele/Kullanicilar/.../Vakalar")}</small>
+          </div>
+          <div class="button-row">
+            <button class="secondary-button" data-action="profile-new">${icon("user")} ${t("profile.newProfile")}</button>
+            <button class="danger-button" data-action="profile-logout">${icon("stop")} ${t("profile.logout")}</button>
+          </div>
+        </article>
+        <article class="settings-card">
+          <span class="settings-kicker">${t("profile.cases")}</span>
+          <h3>${t("profile.caseTitle")}</h3>
+          <div class="profile-case-list">${caseCards}</div>
+        </article>
+      </div>
+    </section>
+  `;
+}
 
 function isExternalUrl(url) {
   try {
@@ -686,6 +914,20 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  const profileLanguage = event.target.closest("#profile-language");
+  if (profileLanguage) {
+    setLanguage(profileLanguage.value);
+    renderProfileGate();
+    return;
+  }
+
+  const profileTheme = event.target.closest("#profile-theme");
+  if (profileTheme) {
+    setTheme(profileTheme.value);
+    renderProfileGate();
+    return;
+  }
+
   const select = event.target.closest("[data-action='language-select']");
   if (select) {
     setLanguage(select.value);
@@ -758,6 +1000,49 @@ document.addEventListener("input", (event) => {
 
 async function handleAction(button) {
   const action = button.dataset.action;
+  if (action === "profile-create-start" || action === "profile-new") {
+    state.profileGateMode = "create";
+    showProfileGate();
+    return;
+  }
+  if (action === "profile-select-back") {
+    state.profileGateMode = "select";
+    showProfileGate();
+    return;
+  }
+  if (action === "profile-select") {
+    try {
+      await selectProfile(button.dataset.username || "");
+    } catch (error) {
+      showToast(t("profile.selectFailed", { message: error.message }), "error");
+      showProfileGate(error.message);
+    }
+    return;
+  }
+  if (action === "profile-submit") {
+    try {
+      await createProfileFromGate();
+    } catch (error) {
+      showToast(t("profile.createFailed", { message: error.message }), "error");
+      showProfileGate(error.message);
+    }
+    return;
+  }
+  if (action === "profile-logout") {
+    try {
+      await apiRequest("/api/profiles/logout", { method: "POST" });
+      state.activeProfile = null;
+      state.activeCase = null;
+      state.cases = [];
+      state.profileGateMode = state.profiles.length ? "select" : "create";
+      syncProfileButton();
+      showProfileGate();
+    } catch (error) {
+      showToast(t("profile.logoutFailed", { message: error.message }), "error");
+    }
+    return;
+  }
+
   if (action?.startsWith("android-")) {
     const handled = await handleAndroidAction(button, {
       apiRequest,
@@ -2800,10 +3085,15 @@ async function previewCarvedFile(filePath) {
 async function bootApp() {
   setLanguage(state.language);
   setTheme(state.theme);
-  await loadPersistedSettings();
   installUiErrorHandlers();
   hydrateIcons();
+  await loadProfiles();
+  if (state.activeProfile) {
+    await loadPersistedSettings();
+    await loadEvidenceCases();
+  }
   render();
+  if (state.profileGateVisible) renderProfileGate();
 
   // Developer mode — 5 kez logoya tıklayınca aktifleşir
   initDeveloperMode({ apiRequest, backendReady });

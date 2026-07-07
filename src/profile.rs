@@ -91,12 +91,7 @@ pub fn bootstrap_profiles() -> AmeleResult<ProfileBootstrap> {
         .iter()
         .find(|profile| profile.open_directly)
         .cloned();
-    let active_profile = direct_profile.or_else(|| {
-        store
-            .active_username
-            .as_deref()
-            .and_then(|username| find_profile(&store, username))
-    });
+    let active_profile = direct_profile;
 
     if let Some(profile) = active_profile.clone() {
         set_active_profile(Some(profile.clone()));
