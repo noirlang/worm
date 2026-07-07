@@ -96,6 +96,7 @@ pub fn bootstrap_profiles() -> AmeleResult<ProfileBootstrap> {
     if let Some(profile) = active_profile.clone() {
         set_active_profile(Some(profile.clone()));
         ensure_profile_dirs(&profile)?;
+        ensure_profile_settings(&profile)?;
     } else {
         set_active_profile(None);
     }
@@ -291,15 +292,17 @@ fn ensure_profile_dirs(profile: &LocalProfile) -> AmeleResult<()> {
 
 fn ensure_profile_settings(profile: &LocalProfile) -> AmeleResult<()> {
     let path = settings_path_for_username(&profile.username);
-    if path.is_file() {
-        return Ok(());
-    }
-    let mut settings = settings::AppSettings::default();
+    let mut settings = if path.is_file() {
+        settings::AppSettings::load(&path)?
+    } else {
+        settings::AppSettings::default()
+    };
     let profile_dir = profile_dir_for_username(&profile.username);
     settings.cikti_klasoru = profile_dir.join("Ciktilar");
     settings.vaka_klasoru = profile_dir.join("Vakalar");
     settings.dil = profile.language.clone();
     settings.karanlik_tema = profile.theme != "light";
+    settings.normalize();
     settings.save(path)
 }
 

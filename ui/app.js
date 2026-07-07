@@ -57,6 +57,11 @@ const state = {
   activeProfile: null,
   profileGateVisible: false,
   profileGateMode: "select",
+  profileDraft: {
+    fullName: "",
+    username: "",
+    openDirectly: false
+  },
   imageMount: null,
   imageMountLogHTML: "",
   imagePathInput: "",
@@ -189,6 +194,15 @@ async function saveSettingsFromControls() {
   return result;
 }
 
+async function persistSettingsFromControls() {
+  const result = await saveSettingsFromControls();
+  render();
+  const savedPath = result?.path ? `<br /><small>${escapeHtml(result.path)}</small>` : "";
+  setStatus("[data-settings-status]", `${icon("info")} ${t("settingsSaved")}${savedPath}`);
+  showToast(t("settingsSaved"));
+  return result;
+}
+
 async function loadProfiles() {
   if (!backendReady()) {
     hideProfileGate();
@@ -262,24 +276,27 @@ function renderProfileGate(errorMessage = "") {
 }
 
 function profileFormHtml() {
+  const draft = state.profileDraft || {};
+  const draftLanguage = draft.language || state.language;
+  const draftTheme = draft.theme || state.theme;
   return `
     <div class="profile-form">
       ${field(t("settings.language"), `
         <select id="profile-language" class="select">
-          <option value="tr" ${state.language === "tr" ? "selected" : ""}>Türkçe</option>
-          <option value="en" ${state.language === "en" ? "selected" : ""}>English</option>
+          <option value="tr" ${draftLanguage === "tr" ? "selected" : ""}>Türkçe</option>
+          <option value="en" ${draftLanguage === "en" ? "selected" : ""}>English</option>
         </select>
       `)}
       ${field(t("settings.darkTheme"), `
         <select id="profile-theme" class="select">
-          <option value="dark" ${state.theme !== "light" ? "selected" : ""}>${t("profile.themeDark")}</option>
-          <option value="light" ${state.theme === "light" ? "selected" : ""}>${t("profile.themeLight")}</option>
+          <option value="dark" ${draftTheme !== "light" ? "selected" : ""}>${t("profile.themeDark")}</option>
+          <option value="light" ${draftTheme === "light" ? "selected" : ""}>${t("profile.themeLight")}</option>
         </select>
       `)}
-      ${field(t("profile.fullName"), `<input id="profile-full-name" class="input" autocomplete="name" />`)}
-      ${field(t("profile.username"), `<input id="profile-username" class="input" autocomplete="username" />`)}
+      ${field(t("profile.fullName"), `<input id="profile-full-name" class="input" autocomplete="name" value="${escapeHtml(draft.fullName || "")}" />`)}
+      ${field(t("profile.username"), `<input id="profile-username" class="input" autocomplete="username" value="${escapeHtml(draft.username || "")}" />`)}
       <label class="check-row">
-        <input type="checkbox" id="profile-create-directly" />
+        <input type="checkbox" id="profile-create-directly" ${draft.openDirectly ? "checked" : ""} />
         <span>${t("profile.openDirectly")}</span>
       </label>
       <div class="button-row">
@@ -288,6 +305,21 @@ function profileFormHtml() {
       </div>
     </div>
   `;
+}
+
+function captureProfileDraft() {
+  const fullName = document.querySelector("#profile-full-name");
+  const username = document.querySelector("#profile-username");
+  const language = document.querySelector("#profile-language");
+  const theme = document.querySelector("#profile-theme");
+  const direct = document.querySelector("#profile-create-directly");
+  state.profileDraft = {
+    fullName: fullName ? fullName.value : state.profileDraft?.fullName || "",
+    username: username ? username.value : state.profileDraft?.username || "",
+    language: language ? language.value : state.profileDraft?.language || state.language,
+    theme: theme ? theme.value : state.profileDraft?.theme || state.theme,
+    openDirectly: direct ? direct.checked : Boolean(state.profileDraft?.openDirectly)
+  };
 }
 
 function profileInitials(profile) {
@@ -337,6 +369,7 @@ async function createProfileFromGate() {
   });
   state.profiles.push(result.profile);
   state.activeProfile = result.profile;
+  state.profileDraft = { fullName: "", username: "", openDirectly: false };
   setLanguage(result.profile.language === "en" ? "en" : "tr");
   setTheme(result.profile.theme === "light" ? "light" : "dark");
   hideProfileGate();
@@ -913,9 +946,11 @@ document.addEventListener("click", (event) => {
   }
 });
 
-document.addEventListener("change", (event) => {
+document.addEventListener("change", async (event) => {
   const profileLanguage = event.target.closest("#profile-language");
   if (profileLanguage) {
+    captureProfileDraft();
+    state.profileDraft.language = profileLanguage.value;
     setLanguage(profileLanguage.value);
     renderProfileGate();
     return;
@@ -923,16 +958,27 @@ document.addEventListener("change", (event) => {
 
   const profileTheme = event.target.closest("#profile-theme");
   if (profileTheme) {
+    captureProfileDraft();
+    state.profileDraft.theme = profileTheme.value;
     setTheme(profileTheme.value);
     renderProfileGate();
     return;
   }
 
+  const profileDirect = event.target.closest("#profile-create-directly");
+  if (profileDirect) {
+    captureProfileDraft();
+    return;
+  }
+
   const select = event.target.closest("[data-action='language-select']");
   if (select) {
-    setLanguage(select.value);
-    showToast(t("settingsSaved"));
-    render();
+    try {
+      await persistSettingsFromControls();
+    } catch (error) {
+      showToast(`Ayarlar kaydedilemedi: ${error.message}`, "error");
+    }
+    return;
   }
 
   const target = event.target.closest("[data-field='target']");
@@ -995,7 +1041,9 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  // Empty
+  if (event.target.closest("#profile-full-name") || event.target.closest("#profile-username")) {
+    captureProfileDraft();
+  }
 });
 
 async function handleAction(button) {
@@ -1060,7 +1108,12 @@ async function handleAction(button) {
 
   if (action === "theme-toggle") {
     setTheme(state.theme === "dark" ? "light" : "dark");
-    render();
+    try {
+      await persistSettingsFromControls();
+    } catch (error) {
+      showToast(`Ayarlar kaydedilemedi: ${error.message}`, "error");
+      render();
+    }
     return;
   }
 
@@ -1709,11 +1762,7 @@ async function handleAction(button) {
 
   if (action === "save-settings") {
     try {
-      const result = await saveSettingsFromControls();
-      render();
-      const savedPath = result?.path ? `<br /><small>${escapeHtml(result.path)}</small>` : "";
-      setStatus("[data-settings-status]", `${icon("info")} ${t("settingsSaved")}${savedPath}`);
-      showToast(t("settingsSaved"));
+      await persistSettingsFromControls();
     } catch (error) {
       const message = `Ayarlar kaydedilemedi: ${error.message}`;
       setStatus("[data-settings-status]", `${icon("info")} ${escapeHtml(message)}`);
