@@ -30,7 +30,7 @@ if (isNativeLinux) document.documentElement.classList.add("native-linux");
 const app = document.querySelector("#app");
 const view = document.querySelector("#view");
 const profileGate = document.querySelector("#profile-gate");
-const preferredLanguage = localStorage.getItem("amele-language") || "tr";
+const preferredLanguage = localStorage.getItem("amele-language") || "en";
 const requestedTheme = urlParams.get("theme");
 const preferredTheme = ["dark", "light"].includes(requestedTheme || "") ? requestedTheme : localStorage.getItem("amele-theme") || "dark";
 
