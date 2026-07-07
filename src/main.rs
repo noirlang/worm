@@ -442,9 +442,14 @@ fn remote_ram_command(args: Vec<String>) -> Result<(), String> {
         .map_err(|err| crate_diagnostic(err.to_string()))?;
     let job_id = format!("cli-{}", std::process::id());
     let remote_result = connection
-        .start_remote_ram(&remote_file, Some(&job_id), selected_format, |done, total| {
-            print_progress("remote-ram", done, total);
-        })
+        .start_remote_ram(
+            &remote_file,
+            Some(&job_id),
+            selected_format,
+            |done, total| {
+                print_progress("remote-ram", done, total);
+            },
+        )
         .map_err(|err| crate_diagnostic(err.to_string()))?;
     let download = connection
         .download_ram_file(
@@ -1511,11 +1516,18 @@ fn remote_image_command(args: Vec<String>) -> Result<(), String> {
     let mut connection =
         RemoteConnection::connect(&args[0], port, token).map_err(|err| err.to_string())?;
     let result = connection
-        .acquire_image(&args[2], None, &args[3], None, selected_format, |done: u64, total: u64| {
-            if let Some(percent) = done.saturating_mul(100).checked_div(total) {
-                eprintln!("{}%", percent);
-            }
-        })
+        .acquire_image(
+            &args[2],
+            None,
+            &args[3],
+            None,
+            selected_format,
+            |done: u64, total: u64| {
+                if let Some(percent) = done.saturating_mul(100).checked_div(total) {
+                    eprintln!("{}%", percent);
+                }
+            },
+        )
         .map_err(|err| err.to_string())?;
     let plan = output_format::OutputPlan {
         format: selected_format,

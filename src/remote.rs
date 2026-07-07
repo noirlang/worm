@@ -820,7 +820,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut conn = RemoteConnection::connect("127.0.0.1", port, None).unwrap();
         let result = conn
-            .acquire_image("0", None, dir.path(), None, |_done, _total| {})
+            .acquire_image(
+                "0",
+                None,
+                dir.path(),
+                None,
+                AcquisitionOutputFormat::Raw,
+                |_done, _total| {},
+            )
             .unwrap();
         assert_eq!(result.job_id, "IMG_TEST");
         assert_eq!(std::fs::read(result.target_path).unwrap(), b"disk-data");
