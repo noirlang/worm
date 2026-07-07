@@ -54,6 +54,14 @@ pub fn settings_save_endpoint(body: &[u8]) -> Response {
     settings.normalize();
     match settings.save(&path) {
         Ok(()) => {
+            let _ = crate::profile::update_active_preferences(
+                &settings.dil,
+                if settings.karanlik_tema {
+                    "dark"
+                } else {
+                    "light"
+                },
+            );
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Info,
                 "api:settings",

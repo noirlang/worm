@@ -28,8 +28,9 @@ pub struct AppSettings {
 impl Default for AppSettings {
     /// Amele ana klasörü altında güvenli varsayılan ayarları üretir.
     fn default() -> Self {
-        let home = home_dir();
-        let amele_dir = home.join("Amele");
+        let amele_dir = crate::profile::active_username()
+            .map(|username| crate::profile::profile_dir_for_username(&username))
+            .unwrap_or_else(|| home_dir().join("Amele"));
         Self {
             varsayilan_port: DEFAULT_PORT,
             varsayilan_boyut_mb: DEFAULT_SIZE_MB,
@@ -47,6 +48,9 @@ impl Default for AppSettings {
 
 /// Kalıcı kullanıcı ayarlarının varsayılan dosya yolunu döndürür.
 pub fn default_settings_path() -> PathBuf {
+    if let Some(path) = crate::profile::active_settings_path() {
+        return path;
+    }
     home_dir().join("Amele").join("ayarlar.json")
 }
 

@@ -12,6 +12,8 @@ use std::sync::Mutex;
 pub struct EvidenceSummary {
     pub case_name: String,
     pub case_dir: PathBuf,
+    pub created_by: Option<String>,
+    pub created_by_name: Option<String>,
     pub output_count: usize,
     pub android_count: usize,
     pub hash_count: usize,
@@ -86,6 +88,7 @@ impl EvidenceVault {
             logger.info(format!("Vaka olusturuldu: {case_name}"));
             logger.info(format!("Vaka klasoru: {}", case_dir.display()));
         }
+        write_case_metadata(&case_name, &case_dir)?;
         runtime_log(
             LogLevel::Info,
             "evidence",
@@ -196,9 +199,12 @@ impl EvidenceVault {
 
     /// Vaka kasasının güncel dosya sayılarını döndürür.
     pub fn summary(&self) -> AmeleResult<EvidenceSummary> {
+        let metadata = read_case_metadata(&self.case_dir);
         Ok(EvidenceSummary {
             case_name: self.case_name.clone(),
             case_dir: self.case_dir.clone(),
+            created_by: metadata.created_by,
+            created_by_name: metadata.created_by_name,
             output_count: self.list_files("ciktilar")?.len(),
             android_count: self.list_files("android")?.len(),
             hash_count: self.list_files("hash")?.len(),
@@ -219,6 +225,47 @@ impl EvidenceVault {
             _ => &self.case_dir,
         }
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Vaka sahibini ve ilk oluşturma bilgisini saklayan metadata dosyasıdır.
+pub struct EvidenceMetadata {
+    pub case_name: String,
+    pub created_at: String,
+    pub created_by: Option<String>,
+    pub created_by_name: Option<String>,
+}
+
+/// Vaka metadata dosyasını oluşturur; mevcut dosyayı ezmez.
+fn write_case_metadata(case_name: &str, case_dir: &Path) -> AmeleResult<()> {
+    let path = case_dir.join("vaka.json");
+    if path.is_file() {
+        return Ok(());
+    }
+    let profile = crate::profile::active_profile();
+    let metadata = EvidenceMetadata {
+        case_name: case_name.to_string(),
+        created_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        created_by: profile.as_ref().map(|profile| profile.username.clone()),
+        created_by_name: profile.as_ref().map(|profile| profile.full_name.clone()),
+    };
+    let content = serde_json::to_string_pretty(&metadata)?;
+    fs::write(&path, content).map_err(|err| {
+        AmeleError::io(
+            HataKodu::DosyaYazma,
+            format!("Vaka metadata yazılamadı: {}", path.display()),
+            err,
+        )
+    })
+}
+
+/// Vaka metadata dosyasını okur.
+pub fn read_case_metadata(case_dir: &Path) -> EvidenceMetadata {
+    let path = case_dir.join("vaka.json");
+    let Ok(content) = fs::read_to_string(path) else {
+        return EvidenceMetadata::default();
+    };
+    serde_json::from_str(&content).unwrap_or_default()
 }
 
 #[cfg(test)]

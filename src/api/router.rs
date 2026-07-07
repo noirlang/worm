@@ -2,8 +2,8 @@
 use crate::server::{Response, json_error, json_ok};
 
 use super::{
-    acquisition_control, android, desktop, developer, evidence, hash_api, ram, settings, system,
-    update, wireguard,
+    acquisition_control, android, desktop, developer, evidence, hash_api, profile, ram, settings,
+    system, update, wireguard,
 };
 
 /// API HTTP metod/path çiftini ilgili endpoint fonksiyonuna yönlendirir ve detaylıca loglar.
@@ -49,6 +49,10 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
         }
         ("GET", "/api/settings") => settings::settings_get_endpoint(),
         ("POST", "/api/settings") => settings::settings_save_endpoint(body),
+        ("GET", "/api/profiles") => profile::profiles_get_endpoint(),
+        ("POST", "/api/profiles/create") => profile::profile_create_endpoint(body),
+        ("POST", "/api/profiles/select") => profile::profile_select_endpoint(body),
+        ("POST", "/api/profiles/logout") => profile::profile_logout_endpoint(),
         ("GET", "/api/settings-default") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Debug,

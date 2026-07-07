@@ -44,6 +44,8 @@ pub fn evidence_create_endpoint(body: &[u8]) -> Response {
                 "output_dir": vault.outputs_dir,
                 "ram_dir": vault.ram_dir,
                 "android_dir": vault.android_dir,
+                "created_by": summary.created_by,
+                "created_by_name": summary.created_by_name,
                 "output_count": summary.output_count,
                 "android_count": summary.android_count,
                 "hash_count": summary.hash_count,
@@ -116,6 +118,8 @@ pub fn evidence_summary_endpoint() -> Response {
         Ok(summary) => json_ok(json!({
             "case_name": summary.case_name,
             "case_dir": summary.case_dir,
+            "created_by": summary.created_by,
+            "created_by_name": summary.created_by_name,
             "output_count": summary.output_count,
             "android_count": summary.android_count,
             "hash_count": summary.hash_count,
@@ -249,12 +253,16 @@ pub fn report_create_endpoint(body: &[u8]) -> Response {
 
 /// Tek vaka klasörünü API listeleme JSON'una dönüştürür.
 fn case_listing_json(case_name: &str, case_dir: &Path) -> Value {
+    let metadata = crate::evidence::read_case_metadata(case_dir);
     json!({
         "case_name": case_name,
         "case_dir": case_dir,
         "output_dir": case_dir.join("ciktilar"),
         "ram_dir": case_dir.join("ram"),
         "android_dir": case_dir.join("android"),
+        "created_by": metadata.created_by,
+        "created_by_name": metadata.created_by_name,
+        "created_at": metadata.created_at,
         "output_count": count_directory_entries(&case_dir.join("ciktilar")),
         "ram_count": count_directory_entries(&case_dir.join("ram")),
         "android_count": count_directory_entries(&case_dir.join("android")),

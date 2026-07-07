@@ -8,6 +8,7 @@ pub mod hash_api;
 mod helpers;
 mod jobs;
 mod mount;
+pub mod profile;
 pub mod ram;
 mod ram_tools;
 mod router;

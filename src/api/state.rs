@@ -38,7 +38,7 @@ pub fn wireguard_manager() -> &'static Mutex<crate::wireguard::WireGuardManager>
     WIREGUARD_MANAGER.get_or_init(|| Mutex::new(crate::wireguard::WireGuardManager::new()))
 }
 
-/// Amele/Vakalar varsayılan vaka taban klasörünü döndürür.
+/// Aktif profile göre varsayılan vaka taban klasörünü döndürür.
 pub fn default_case_base_dir() -> PathBuf {
     #[cfg(test)]
     if let Some(path) = test_case_base_dir()
@@ -46,6 +46,10 @@ pub fn default_case_base_dir() -> PathBuf {
         .ok()
         .and_then(|current| current.clone())
     {
+        return path;
+    }
+
+    if let Some(path) = crate::profile::active_case_base_dir() {
         return path;
     }
 
