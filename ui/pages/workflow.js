@@ -60,6 +60,12 @@ export function workflowPage({ id, workflows, state, t, icon, localText, canonic
             <div class="section-divider"></div>
             <p class="section-label">${t("workflow.caseSection")}</p>
             ${outputField}
+            ${field(t("workflow.outputFormat"), `
+              <select class="select" data-field="output-format">
+                <option value="raw">${t("workflow.formatRaw")}</option>
+                <option value="aff4">${t("workflow.formatAff4")}</option>
+              </select>
+            `)}
 
             <div class="section-divider"></div>
             <p class="section-label">${isRam ? t("workflow.ramOutput") : t("workflow.diskOutput")}</p>

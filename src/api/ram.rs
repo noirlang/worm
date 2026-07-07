@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 
-use crate::hash::{self, HashAlgorithm};
+use crate::output_format::{self, AcquisitionOutputFormat};
 use crate::ram;
 use crate::ram_analysis;
 use crate::remote::RemoteConnection;
@@ -55,6 +55,7 @@ pub struct LocalRamRequest {
     pub tool: Option<String>,
     pub tool_path: Option<String>,
     pub case_name: Option<String>,
+    pub output_format: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -65,6 +66,7 @@ pub struct RemoteRamRequest {
     pub token: Option<String>,
     pub output: String,
     pub case_name: Option<String>,
+    pub output_format: Option<String>,
 }
 
 /// Yerel RAM edinim işini AVML veya WinPMEM ile başlatır.
@@ -126,6 +128,13 @@ fn run_local_ram_job(
     mut request: LocalRamRequest,
     control: ram::CancellationToken,
 ) {
+    let format = match AcquisitionOutputFormat::parse(request.output_format.as_deref()) {
+        Ok(format) => format,
+        Err(err) => {
+            fail_acquisition_job_with_message(&job_id, err, "RAM edinimi basarisiz");
+            return;
+        }
+    };
     let output = match ram_output_path(&request.output, request.case_name.as_deref(), None) {
         Ok(output) => output,
         Err(err) => {
@@ -133,11 +142,18 @@ fn run_local_ram_job(
             return;
         }
     };
-    request.output = output.to_string_lossy().into_owned();
+    let plan = output_format::plan_output(&output, format);
+    request.output = plan.working_path.to_string_lossy().into_owned();
 
     let tool = request.tool.as_deref().unwrap_or_default();
     if local_ram_requires_elevation(tool) {
-        run_elevated_local_ram_job(&job_id, &request, &control);
+        run_elevated_local_ram_job(
+            &job_id,
+            &request,
+            &control,
+            &plan,
+            request.case_name.as_deref().unwrap_or_default(),
+        );
         return;
     }
 
@@ -163,28 +179,40 @@ fn run_local_ram_job(
 
     match result {
         Ok(result) => {
-            let sha256 = match finalize_ram_sha256(&job_id, &result.output_file, None) {
-                Ok(value) => value,
+            match output_format::finalize_output(
+                &plan,
+                "ram",
+                request.tool.as_deref().unwrap_or_default(),
+                request.case_name.as_deref().unwrap_or_default(),
+                None,
+            ) {
+                Ok(finalized) => finish_acquisition_job_with_message(
+                    &job_id,
+                    json!({
+                        "message": "RAM edinimi tamamlandi",
+                        "target_path": finalized.target_path,
+                        "bytes_written": result.bytes_written,
+                        "sha256": finalized.sha256,
+                        "raw_sha256": finalized.raw_sha256,
+                        "output_format": finalized.format.as_str(),
+                    }),
+                    "RAM edinimi tamamlandi",
+                ),
                 Err(err) => {
-                    fail_acquisition_job_with_message(&job_id, err, "RAM hash olusturulamadi");
-                    return;
+                    fail_acquisition_job_with_message(&job_id, err, "RAM formati tamamlanamadi")
                 }
-            };
-            finish_acquisition_job_with_message(
-                &job_id,
-                json!({
-                    "message": "RAM edinimi tamamlandi",
-                    "target_path": result.output_file,
-                    "bytes_written": result.bytes_written,
-                    "sha256": sha256,
-                }),
-                "RAM edinimi tamamlandi",
-            );
+            }
         }
         Err(err) => {
             let message = err.to_string();
             if local_ram_error_can_retry_elevated(&message) {
-                run_elevated_local_ram_job(&job_id, &request, &control);
+                run_elevated_local_ram_job(
+                    &job_id,
+                    &request,
+                    &control,
+                    &plan,
+                    request.case_name.as_deref().unwrap_or_default(),
+                );
             } else {
                 fail_acquisition_job_with_message(&job_id, message, "RAM edinimi basarisiz")
             }
@@ -194,6 +222,13 @@ fn run_local_ram_job(
 
 /// Uzak agent üzerinde RAM edinimi başlatır ve çıkan dosyayı indirir.
 fn run_remote_ram_job(job_id: String, request: RemoteRamRequest) {
+    let format = match AcquisitionOutputFormat::parse(request.output_format.as_deref()) {
+        Ok(format) => format,
+        Err(err) => {
+            fail_acquisition_job_with_message(&job_id, err, "RAM edinimi basarisiz");
+            return;
+        }
+    };
     let target_path = match ram_output_path(
         &request.output,
         request.case_name.as_deref(),
@@ -205,7 +240,8 @@ fn run_remote_ram_job(job_id: String, request: RemoteRamRequest) {
             return;
         }
     };
-    let remote_file = ram_remote_file_name(&target_path.to_string_lossy());
+    let plan = output_format::plan_output(&target_path, format);
+    let remote_file = ram_remote_file_name(&plan.working_path.to_string_lossy());
 
     match RemoteConnection::connect(&request.ip, request.port, request.token.clone()) {
         Ok(mut connection) => {
@@ -217,7 +253,7 @@ fn run_remote_ram_job(job_id: String, request: RemoteRamRequest) {
                     update_acquisition_message(&job_id, "RAM dosyası indiriliyor");
                     match connection.download_ram_file(
                         &remote_file,
-                        &target_path,
+                        &plan.working_path,
                         Some(&remote_job_id),
                         |done, total| {
                             update_acquisition_progress_message(
@@ -230,33 +266,38 @@ fn run_remote_ram_job(job_id: String, request: RemoteRamRequest) {
                     ) {
                         Ok(download) => {
                             let remote_sha256 = download.sha256.clone().or(ram_result.sha256);
-                            let sha256 = match finalize_ram_sha256(
-                                &job_id,
-                                &download.target_path,
+                            let actual_plan = output_format::OutputPlan {
+                                format,
+                                working_path: download.target_path.clone(),
+                                final_path: plan.final_path.clone(),
+                            };
+                            match output_format::finalize_output(
+                                &actual_plan,
+                                "ram",
+                                &request.ip,
+                                request.case_name.as_deref().unwrap_or_default(),
                                 remote_sha256,
                             ) {
-                                Ok(value) => value,
-                                Err(err) => {
-                                    fail_acquisition_job_with_message(
-                                        &job_id,
-                                        err,
-                                        "RAM hash olusturulamadi",
-                                    );
-                                    return;
-                                }
-                            };
-                            finish_acquisition_job_with_message(
-                                &job_id,
-                                json!({
-                                    "message": download.message,
-                                    "remote_job_id": ram_result.job_id,
-                                    "target_path": download.target_path,
-                                    "bytes_transferred": download.bytes_transferred,
-                                    "remote_bytes": ram_result.total_size,
-                                    "sha256": sha256,
-                                }),
-                                "RAM edinimi tamamlandi",
-                            );
+                                Ok(finalized) => finish_acquisition_job_with_message(
+                                    &job_id,
+                                    json!({
+                                        "message": download.message,
+                                        "remote_job_id": ram_result.job_id,
+                                        "target_path": finalized.target_path,
+                                        "bytes_transferred": download.bytes_transferred,
+                                        "remote_bytes": ram_result.total_size,
+                                        "sha256": finalized.sha256,
+                                        "raw_sha256": finalized.raw_sha256,
+                                        "output_format": finalized.format.as_str(),
+                                    }),
+                                    "RAM edinimi tamamlandi",
+                                ),
+                                Err(err) => fail_acquisition_job_with_message(
+                                    &job_id,
+                                    err,
+                                    "RAM formati tamamlanamadi",
+                                ),
+                            }
                         }
                         Err(err) => fail_acquisition_job_with_message(
                             &job_id,
@@ -276,22 +317,6 @@ fn run_remote_ram_job(job_id: String, request: RemoteRamRequest) {
             fail_acquisition_job_with_message(&job_id, err.to_string(), "RAM edinimi basarisiz")
         }
     }
-}
-
-/// Tamamlanan RAM çıktısı için SHA-256 değerini sonuç veya dosya üzerinden kesinleştirir.
-fn finalize_ram_sha256(
-    job_id: &str,
-    target_path: &Path,
-    existing_sha256: Option<String>,
-) -> Result<String, String> {
-    update_acquisition_message(job_id, "RAM SHA256 olusturuluyor");
-    let sha256 = match existing_sha256.filter(|value| !value.trim().is_empty()) {
-        Some(value) => value,
-        None => hash::calculate_file_hash(target_path, HashAlgorithm::Sha256)
-            .map_err(|err| err.to_string())?,
-    };
-    hash::write_sha256_sidecar(target_path, &sha256).map_err(|err| err.to_string())?;
-    Ok(sha256)
 }
 
 /// Seçilen RAM aracı için yerel root/admin gerekip gerekmediğini belirler.
@@ -333,6 +358,8 @@ fn run_elevated_local_ram_job(
     job_id: &str,
     request: &LocalRamRequest,
     control: &ram::CancellationToken,
+    plan: &output_format::OutputPlan,
+    case_name: &str,
 ) {
     update_acquisition_message(
         job_id,
@@ -463,23 +490,32 @@ fn run_elevated_local_ram_job(
             );
             return;
         };
-        let sha256 = match finalize_ram_sha256(job_id, &target_path, None) {
-            Ok(value) => value,
-            Err(err) => {
-                fail_acquisition_job_with_message(job_id, err, "RAM hash olusturulamadi");
-                return;
-            }
+        let actual_plan = output_format::OutputPlan {
+            format: plan.format,
+            working_path: target_path,
+            final_path: plan.final_path.clone(),
         };
-        finish_acquisition_job_with_message(
-            job_id,
-            json!({
-                "message": "RAM edinimi tamamlandi",
-                "target_path": result.get("target_path").cloned().unwrap_or(Value::Null),
-                "bytes_written": result.get("bytes_written").cloned().unwrap_or(Value::Null),
-                "sha256": sha256,
-            }),
-            "RAM edinimi tamamlandi",
-        );
+        match output_format::finalize_output(
+            &actual_plan,
+            "ram",
+            request.tool.as_deref().unwrap_or_default(),
+            case_name,
+            None,
+        ) {
+            Ok(finalized) => finish_acquisition_job_with_message(
+                job_id,
+                json!({
+                    "message": "RAM edinimi tamamlandi",
+                    "target_path": finalized.target_path,
+                    "bytes_written": result.get("bytes_written").cloned().unwrap_or(Value::Null),
+                    "sha256": finalized.sha256,
+                    "raw_sha256": finalized.raw_sha256,
+                    "output_format": finalized.format.as_str(),
+                }),
+                "RAM edinimi tamamlandi",
+            ),
+            Err(err) => fail_acquisition_job_with_message(job_id, err, "RAM formati tamamlanamadi"),
+        }
     } else {
         fail_acquisition_job_with_message(
             job_id,

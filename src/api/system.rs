@@ -14,7 +14,7 @@ use crate::disk;
 use crate::disk::{DiskAcquisitionControl, DiskAcquisitionTask};
 use crate::disk_analysis;
 use crate::evidence::EvidenceVault;
-use crate::hash;
+use crate::output_format::{self, AcquisitionOutputFormat};
 use crate::ram;
 use crate::remote::RemoteConnection;
 use crate::server::{Response, json_error, json_ok};
@@ -38,7 +38,6 @@ use super::{
     sanitize_case_name,
     sanitize_file_stem,
     set_current_evidence_case,
-    sha256_file,
     spawn_elevated_helper,
     update_acquisition_message,
     update_acquisition_progress,
@@ -57,6 +56,7 @@ pub struct LocalImageRequest {
     pub disk_name: Option<String>,
     pub output: String,
     pub case_name: Option<String>,
+    pub output_format: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -69,6 +69,7 @@ pub struct RemoteImageRequest {
     pub disk_name: Option<String>,
     pub output: String,
     pub case_name: Option<String>,
+    pub output_format: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -180,6 +181,13 @@ fn run_local_image_job(
     request: LocalImageRequest,
     control: ram::CancellationToken,
 ) {
+    let format = match AcquisitionOutputFormat::parse(request.output_format.as_deref()) {
+        Ok(format) => format,
+        Err(err) => {
+            fail_acquisition_job_with_message(&job_id, err, "Imaj alma basarisiz");
+            return;
+        }
+    };
     let output = match image_output_dir(&request.output, request.case_name.as_deref()) {
         Ok(output) => output,
         Err(err) => {
@@ -193,10 +201,18 @@ fn run_local_image_job(
         &output.to_string_lossy(),
         None,
     );
-    let task = DiskAcquisitionTask::new(&request.source, &target);
+    let plan = output_format::plan_output(&target, format);
+    let task = DiskAcquisitionTask::new(&request.source, &plan.working_path);
 
     if local_image_source_requires_elevation(&task.source) {
-        run_elevated_local_image_job(&job_id, &task, &control);
+        run_elevated_local_image_job(
+            &job_id,
+            &task,
+            &control,
+            &plan,
+            request.disk_name.as_deref().unwrap_or(&request.source),
+            request.case_name.as_deref().unwrap_or_default(),
+        );
         return;
     }
 
@@ -216,22 +232,42 @@ fn run_local_image_job(
         },
     ) {
         Ok(result) => {
-            finish_acquisition_job_with_message(
-                &job_id,
-                json!({
-                    "message": "Imaj alma tamamlandi",
-                    "target_path": result.target,
-                    "bytes_copied": result.bytes_copied,
-                    "total_bytes": result.total_bytes,
-                    "sha256": result.sha256,
-                }),
-                "Imaj alma tamamlandi",
-            );
+            match output_format::finalize_output(
+                &plan,
+                "disk",
+                request.disk_name.as_deref().unwrap_or(&request.source),
+                request.case_name.as_deref().unwrap_or_default(),
+                result.sha256.clone(),
+            ) {
+                Ok(finalized) => finish_acquisition_job_with_message(
+                    &job_id,
+                    json!({
+                        "message": "Imaj alma tamamlandi",
+                        "target_path": finalized.target_path,
+                        "bytes_copied": result.bytes_copied,
+                        "total_bytes": result.total_bytes,
+                        "sha256": finalized.sha256,
+                        "raw_sha256": finalized.raw_sha256,
+                        "output_format": finalized.format.as_str(),
+                    }),
+                    "Imaj alma tamamlandi",
+                ),
+                Err(err) => {
+                    fail_acquisition_job_with_message(&job_id, err, "Imaj formati tamamlanamadi")
+                }
+            }
         }
         Err(err) => {
             let message = err.to_string();
             if local_image_error_can_retry_elevated(&message) {
-                run_elevated_local_image_job(&job_id, &task, &control);
+                run_elevated_local_image_job(
+                    &job_id,
+                    &task,
+                    &control,
+                    &plan,
+                    request.disk_name.as_deref().unwrap_or(&request.source),
+                    request.case_name.as_deref().unwrap_or_default(),
+                );
             } else {
                 fail_acquisition_job_with_message(&job_id, message, "Imaj alma basarisiz")
             }
@@ -244,6 +280,9 @@ fn run_elevated_local_image_job(
     job_id: &str,
     task: &DiskAcquisitionTask,
     control: &ram::CancellationToken,
+    plan: &output_format::OutputPlan,
+    source_label: &str,
+    case_name: &str,
 ) {
     update_acquisition_message(
         job_id,
@@ -365,17 +404,29 @@ fn run_elevated_local_image_job(
     cleanup_helper_files(&[&request_path, &result_path, &progress_path, &control_path]);
 
     if result.get("ok").and_then(Value::as_bool) == Some(true) {
-        finish_acquisition_job_with_message(
-            job_id,
-            json!({
-                "message": "Imaj alma tamamlandi",
-                "target_path": result.get("target_path").cloned().unwrap_or(Value::Null),
-                "bytes_copied": result.get("bytes_copied").cloned().unwrap_or(Value::Null),
-                "total_bytes": result.get("total_bytes").cloned().unwrap_or(Value::Null),
-                "sha256": result.get("sha256").cloned().unwrap_or(Value::Null),
-            }),
-            "Imaj alma tamamlandi",
-        );
+        let existing_sha256 = result
+            .get("sha256")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        match output_format::finalize_output(plan, "disk", source_label, case_name, existing_sha256)
+        {
+            Ok(finalized) => finish_acquisition_job_with_message(
+                job_id,
+                json!({
+                    "message": "Imaj alma tamamlandi",
+                    "target_path": finalized.target_path,
+                    "bytes_copied": result.get("bytes_copied").cloned().unwrap_or(Value::Null),
+                    "total_bytes": result.get("total_bytes").cloned().unwrap_or(Value::Null),
+                    "sha256": finalized.sha256,
+                    "raw_sha256": finalized.raw_sha256,
+                    "output_format": finalized.format.as_str(),
+                }),
+                "Imaj alma tamamlandi",
+            ),
+            Err(err) => {
+                fail_acquisition_job_with_message(job_id, err, "Imaj formati tamamlanamadi")
+            }
+        }
     } else {
         fail_acquisition_job_with_message(
             job_id,
@@ -449,6 +500,13 @@ pub fn remote_image_endpoint(body: &[u8]) -> Response {
 
 /// Uzak imaj alma işini çalıştırır ve indirilen dosyayı vaka klasörüne yazar.
 fn run_remote_image_job(job_id: String, request: RemoteImageRequest) {
+    let format = match AcquisitionOutputFormat::parse(request.output_format.as_deref()) {
+        Ok(format) => format,
+        Err(err) => {
+            fail_acquisition_job_with_message(&job_id, err, "Imaj alma basarisiz");
+            return;
+        }
+    };
     match RemoteConnection::connect(&request.ip, request.port, request.token) {
         Ok(mut connection) => {
             let remote_job_id = job_id.clone();
@@ -459,41 +517,53 @@ fn run_remote_image_job(job_id: String, request: RemoteImageRequest) {
                     return;
                 }
             };
+            let target_seed = acquisition_target_path(
+                &request.disk_id,
+                request.disk_name.as_deref(),
+                &output.to_string_lossy(),
+                Some(&request.ip),
+            );
+            let plan = output_format::plan_output(&target_seed, format);
             match connection.acquire_image(
                 &request.disk_id,
                 request.disk_name.as_deref(),
-                &output,
+                plan.working_path.parent().unwrap_or(output.as_path()),
                 Some(&remote_job_id),
                 |done, total| update_acquisition_progress(&job_id, done, total),
             ) {
                 Ok(result) => {
-                    let sha256 = match finalize_image_sha256(
-                        &job_id,
-                        &result.target_path,
+                    let actual_plan = output_format::OutputPlan {
+                        format,
+                        working_path: result.target_path.clone(),
+                        final_path: plan.final_path.clone(),
+                    };
+                    match output_format::finalize_output(
+                        &actual_plan,
+                        "disk",
+                        request.disk_name.as_deref().unwrap_or(&request.disk_id),
+                        request.case_name.as_deref().unwrap_or_default(),
                         result.sha256.clone(),
                     ) {
-                        Ok(value) => value,
-                        Err(err) => {
-                            fail_acquisition_job_with_message(
-                                &job_id,
-                                err,
-                                "Imaj hash olusturulamadi",
-                            );
-                            return;
-                        }
-                    };
-                    finish_acquisition_job_with_message(
-                        &job_id,
-                        json!({
-                            "message": result.message,
-                            "remote_job_id": result.job_id,
-                            "target_path": result.target_path,
-                            "bytes_transferred": result.bytes_transferred,
-                            "sha256": sha256,
-                            "md5": result.md5,
-                        }),
-                        "Imaj alma tamamlandi",
-                    );
+                        Ok(finalized) => finish_acquisition_job_with_message(
+                            &job_id,
+                            json!({
+                                "message": result.message,
+                                "remote_job_id": result.job_id,
+                                "target_path": finalized.target_path,
+                                "bytes_transferred": result.bytes_transferred,
+                                "sha256": finalized.sha256,
+                                "raw_sha256": finalized.raw_sha256,
+                                "output_format": finalized.format.as_str(),
+                                "md5": result.md5,
+                            }),
+                            "Imaj alma tamamlandi",
+                        ),
+                        Err(err) => fail_acquisition_job_with_message(
+                            &job_id,
+                            err,
+                            "Imaj formati tamamlanamadi",
+                        ),
+                    }
                 }
                 Err(err) => fail_acquisition_job_with_message(
                     &job_id,
@@ -506,21 +576,6 @@ fn run_remote_image_job(job_id: String, request: RemoteImageRequest) {
             fail_acquisition_job_with_message(&job_id, err.to_string(), "Imaj alma basarisiz")
         }
     }
-}
-
-/// Tamamlanan imaj için SHA-256 değerini sonuç dosyası veya dosya üzerinden kesinleştirir.
-fn finalize_image_sha256(
-    job_id: &str,
-    target_path: &Path,
-    existing_sha256: Option<String>,
-) -> Result<String, String> {
-    update_acquisition_message(job_id, "Imaj SHA256 olusturuluyor");
-    let sha256 = match existing_sha256.filter(|value| !value.trim().is_empty()) {
-        Some(value) => value,
-        None => sha256_file(target_path)?,
-    };
-    hash::write_sha256_sidecar(target_path, &sha256).map_err(|err| err.to_string())?;
-    Ok(sha256)
 }
 
 /// Uzak agent üstündeki AVML/WinPMEM gibi araç durumunu kontrol eder.

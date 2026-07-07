@@ -2332,6 +2332,7 @@ async function startAcquisition(button) {
     if (!requireActiveConnection(workflow, payload)) return;
   }
   const target = document.querySelector("[data-field='target']")?.value.trim();
+  const outputFormat = document.querySelector("[data-field='output-format']")?.value || "raw";
   if (workflow && !workflow.mode.includes("ram") && !target) {
     showToast(t("workflow.diskRequired"), "error");
     return;
@@ -2376,14 +2377,16 @@ async function startAcquisition(button) {
             ? {
                 ...payload,
                 output,
-                case_name: caseName
+                case_name: caseName,
+                output_format: outputFormat
               }
             : {
                 ...payload,
                 disk_id: target,
                 disk_name: diskName,
                 output,
-                case_name: caseName
+                case_name: caseName,
+                output_format: outputFormat
               })
         })
       : await apiRequest(isRam ? "/api/local-ram" : "/api/local-image", {
@@ -2393,13 +2396,15 @@ async function startAcquisition(button) {
                 output,
                 tool: workflow.platform === "Windows" ? "winpmem" : "avml",
                 tool_path: target,
-                case_name: caseName
+                case_name: caseName,
+                output_format: outputFormat
             }
             : {
                 source: target,
                 disk_name: diskName,
                 output,
-                case_name: caseName
+                case_name: caseName,
+                output_format: outputFormat
               })
         });
     if (!start.job_id) throw new Error(t("workflow.jobIdMissing"));
@@ -2415,6 +2420,9 @@ async function startAcquisition(button) {
     writeWorkflowLog(t("workflow.operationCompletedPath", { operation, path: targetPath }));
     if (result.sha256) {
       writeWorkflowLog(t("workflow.hashWritten", { hash: escapeHtml(result.sha256) }));
+    }
+    if (result.output_format) {
+      writeWorkflowLog(t("workflow.formatCompleted", { format: String(result.output_format).toUpperCase() }));
     }
     updateSide("last-action", t("workflow.operationCompleted", { operation }));
     if (workflow?.mode.startsWith("remote") && payload) {

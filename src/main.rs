@@ -9,6 +9,7 @@ use amele::disk;
 use amele::disk_analysis;
 use amele::evidence::EvidenceVault;
 use amele::hash::{self, HashAlgorithm};
+use amele::output_format::{self, AcquisitionOutputFormat};
 use amele::ram;
 use amele::ram_analysis;
 use amele::remote::RemoteConnection;
@@ -198,11 +199,11 @@ fn print_help() {
            ui                                      Native uygulama penceresini ac\n\
            ui-browser                              Debug icin tarayicida ac\n\
            disk-list                               Yerel diskleri listele\n\
-           local-image <kaynak> <vaka> [disk_adı]  Yerel disk/dosya imaji al\n\
-           local-ram <avml|winpmem> <vaka> [arac] Yerel RAM imaji al\n\
+           local-image <kaynak> <vaka> [disk_adı] [raw|aff4]  Yerel disk/dosya imaji al\n\
+           local-ram <avml|winpmem> <vaka> [arac] [raw|aff4] Yerel RAM imaji al\n\
            remote-disks <ip> <port> [token]        Uzak agent disklerini listele\n\
-           remote-image <ip> <port> <disk_id> <cikti_klasoru> [token]\n\
-           remote-ram <ip> <port> <vaka> [token]   Uzak agent RAM imaji al\n\
+           remote-image <ip> <port> <disk_id> <cikti_klasoru> [token] [raw|aff4]\n\
+           remote-ram <ip> <port> <vaka> [token] [raw|aff4] Uzak agent RAM imaji al\n\
            adb-status                              ADB kurulumunu kontrol et\n\
            adb-install                             ADB'yi sistem paket yöneticisiyle kur\n\
            android-devices                         Android cihazlarini listele\n\
@@ -271,8 +272,10 @@ fn disk_list_command() -> Result<(), String> {
 
 /// Yerel disk veya dosya kaynağını vaka klasörüne imaj olarak yazar.
 fn local_image_command(args: Vec<String>) -> Result<(), String> {
+    let mut args = args;
+    let selected_format = extract_output_format(&mut args)?;
     if args.len() < 2 {
-        return Err("Kullanim: local-image <kaynak> <vaka> [disk_adı]".to_string());
+        return Err("Kullanim: local-image <kaynak> <vaka> [disk_adı] [raw|aff4]".to_string());
     }
     let source = PathBuf::from(&args[0]);
     let vault = cli_case_vault(&args[1])?;
@@ -282,59 +285,77 @@ fn local_image_command(args: Vec<String>) -> Result<(), String> {
             .and_then(|name| name.to_str())
             .unwrap_or("disk")
     });
-    let target = vault.outputs_dir.join(format!(
+    let raw_target = vault.outputs_dir.join(format!(
         "{}_{}.img",
         cli_safe_stem(disk_name),
         cli_timestamp()
     ));
-    let task = disk::DiskAcquisitionTask::new(&source, &target);
+    let plan = output_format::plan_output(&raw_target, selected_format);
+    let task = disk::DiskAcquisitionTask::new(&source, &plan.working_path);
     let result = disk::run_disk_acquisition(&task, |done, total| {
         print_progress("imaj", done, total);
     })
     .map_err(|err| crate_diagnostic(err.to_string()))?;
+    let finalized = output_format::finalize_output(
+        &plan,
+        "disk",
+        disk_name,
+        &vault.case_name,
+        result.sha256.clone(),
+    )?;
     print_json(&json!({
         "case": vault.case_name,
-        "target_path": result.target,
+        "target_path": finalized.target_path,
         "bytes_copied": result.bytes_copied,
         "total_bytes": result.total_bytes,
-        "sha256": result.sha256,
+        "sha256": finalized.sha256,
+        "raw_sha256": finalized.raw_sha256,
+        "output_format": finalized.format.as_str(),
     }))
 }
 
 /// AVML veya WinPMEM ile yerel RAM imajı alır.
 fn local_ram_command(args: Vec<String>) -> Result<(), String> {
+    let mut args = args;
+    let selected_format = extract_output_format(&mut args)?;
     if args.len() < 2 {
-        return Err("Kullanim: local-ram <avml|winpmem> <vaka> [arac_yolu]".to_string());
+        return Err("Kullanim: local-ram <avml|winpmem> <vaka> [arac_yolu] [raw|aff4]".to_string());
     }
     let tool = args[0].to_ascii_lowercase();
     let vault = cli_case_vault(&args[1])?;
-    let target = vault.ram_dir.join(format!("ram_{}.raw", cli_timestamp()));
+    let raw_target = vault.ram_dir.join(format!("ram_{}.raw", cli_timestamp()));
+    let plan = output_format::plan_output(&raw_target, selected_format);
     let candidate = args.get(2).map(Path::new).filter(|path| path.exists());
     let token = ram::CancellationToken::default();
     let result = match tool.as_str() {
-        "avml" => ram::acquire_with_avml(&target, candidate, &token, |done, total| {
+        "avml" => ram::acquire_with_avml(&plan.working_path, candidate, &token, |done, total| {
             print_progress("ram", done, total);
         }),
-        "winpmem" => ram::acquire_with_winpmem(&target, candidate, &token, |done, total| {
-            print_progress("ram", done, total);
-        }),
+        "winpmem" => {
+            ram::acquire_with_winpmem(&plan.working_path, candidate, &token, |done, total| {
+                print_progress("ram", done, total);
+            })
+        }
         _ => return Err("tool must be avml or winpmem".to_string()),
     }
     .map_err(|err| crate_diagnostic(err.to_string()))?;
-    let sha256 = hash::calculate_file_hash(&result.output_file, HashAlgorithm::Sha256)
-        .map_err(|err| crate_diagnostic(err.to_string()))?;
+    let finalized = output_format::finalize_output(&plan, "ram", &tool, &vault.case_name, None)?;
     print_json(&json!({
         "case": vault.case_name,
-        "target_path": result.output_file,
+        "target_path": finalized.target_path,
         "bytes_written": result.bytes_written,
-        "sha256": sha256,
+        "sha256": finalized.sha256,
+        "raw_sha256": finalized.raw_sha256,
+        "output_format": finalized.format.as_str(),
     }))
 }
 
 /// Uzak agent üzerinde RAM edinimini başlatır ve sonucu vaka klasörüne indirir.
 fn remote_ram_command(args: Vec<String>) -> Result<(), String> {
+    let mut args = args;
+    let selected_format = extract_output_format(&mut args)?;
     if args.len() < 3 {
-        return Err("Kullanim: remote-ram <ip> <port> <vaka> [token]".to_string());
+        return Err("Kullanim: remote-ram <ip> <port> <vaka> [token] [raw|aff4]".to_string());
     }
     let ip = &args[0];
     let port = parse_port(&args[1])?;
@@ -343,6 +364,7 @@ fn remote_ram_command(args: Vec<String>) -> Result<(), String> {
     let target = vault
         .ram_dir
         .join(format!("{}_ram_{}.raw", cli_safe_stem(ip), cli_timestamp()));
+    let plan = output_format::plan_output(&target, selected_format);
     let remote_file = target
         .file_name()
         .and_then(|name| name.to_str())
@@ -358,21 +380,31 @@ fn remote_ram_command(args: Vec<String>) -> Result<(), String> {
         })
         .map_err(|err| crate_diagnostic(err.to_string()))?;
     let download = connection
-        .download_ram_file(&remote_file, &target, Some(&job_id), |done, total| {
-            print_progress("download", done, total);
-        })
+        .download_ram_file(
+            &remote_file,
+            &plan.working_path,
+            Some(&job_id),
+            |done, total| {
+                print_progress("download", done, total);
+            },
+        )
         .map_err(|err| crate_diagnostic(err.to_string()))?;
-    let sha256 = download.sha256.or(remote_result.sha256).unwrap_or_else(|| {
-        hash::calculate_file_hash(&download.target_path, HashAlgorithm::Sha256)
-            .unwrap_or_else(|_| String::new())
-    });
+    let finalized = output_format::finalize_output(
+        &plan,
+        "ram",
+        ip,
+        &vault.case_name,
+        download.sha256.or(remote_result.sha256),
+    )?;
     print_json(&json!({
         "case": vault.case_name,
         "remote_job_id": remote_result.job_id,
-        "target_path": download.target_path,
+        "target_path": finalized.target_path,
         "bytes_transferred": download.bytes_transferred,
         "remote_bytes": remote_result.total_size,
-        "sha256": sha256,
+        "sha256": finalized.sha256,
+        "raw_sha256": finalized.raw_sha256,
+        "output_format": finalized.format.as_str(),
     }))
 }
 
@@ -1274,6 +1306,34 @@ fn cli_timestamp() -> String {
     Local::now().format("%Y%m%d_%H%M%S").to_string()
 }
 
+/// CLI argümanlarından raw/aff4 format seçimini ayıklar.
+fn extract_output_format(args: &mut Vec<String>) -> Result<AcquisitionOutputFormat, String> {
+    let mut selected = None;
+    let mut index = 0;
+    while index < args.len() {
+        let value = args[index].clone();
+        let parsed = if let Some(format) = value.strip_prefix("--format=") {
+            Some(format.to_string())
+        } else if value == "--aff4" {
+            Some("aff4".to_string())
+        } else if value == "--raw" {
+            Some("raw".to_string())
+        } else if matches!(value.as_str(), "raw" | "dd" | "img" | "aff4") {
+            Some(value)
+        } else {
+            None
+        };
+
+        if let Some(format) = parsed {
+            args.remove(index);
+            selected = Some(format);
+        } else {
+            index += 1;
+        }
+    }
+    AcquisitionOutputFormat::parse(selected.as_deref())
+}
+
 /// JSON çıktıyı stdout'a pretty formatta yazar.
 fn print_json<T: Serialize>(value: &T) -> Result<(), String> {
     println!(
@@ -1343,9 +1403,12 @@ fn remote_disks_command(args: Vec<String>) -> Result<(), String> {
 }
 
 fn remote_image_command(args: Vec<String>) -> Result<(), String> {
+    let mut args = args;
+    let selected_format = extract_output_format(&mut args)?;
     if args.len() < 4 {
         return Err(
-            "Kullanim: remote-image <ip> <port> <disk_id> <cikti_klasoru> [token]".to_string(),
+            "Kullanim: remote-image <ip> <port> <disk_id> <cikti_klasoru> [token] [raw|aff4]"
+                .to_string(),
         );
     }
     let port = parse_port(&args[1])?;
@@ -1359,11 +1422,23 @@ fn remote_image_command(args: Vec<String>) -> Result<(), String> {
             }
         })
         .map_err(|err| err.to_string())?;
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&result).map_err(|err| err.to_string())?
-    );
-    Ok(())
+    let plan = output_format::OutputPlan {
+        format: selected_format,
+        working_path: result.target_path.clone(),
+        final_path: result.target_path.with_extension("aff4"),
+    };
+    let finalized =
+        output_format::finalize_output(&plan, "disk", &args[2], "", result.sha256.clone())?;
+    print_json(&json!({
+        "remote_job_id": result.job_id,
+        "target_path": finalized.target_path,
+        "bytes_transferred": result.bytes_transferred,
+        "sha256": finalized.sha256,
+        "raw_sha256": finalized.raw_sha256,
+        "output_format": finalized.format.as_str(),
+        "md5": result.md5,
+        "message": result.message,
+    }))
 }
 
 fn remote_tool_check_command(args: Vec<String>) -> Result<(), String> {

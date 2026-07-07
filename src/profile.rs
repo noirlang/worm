@@ -314,15 +314,6 @@ fn active_profile_cell() -> &'static Mutex<Option<LocalProfile>> {
     ACTIVE_PROFILE.get_or_init(|| Mutex::new(None))
 }
 
-fn find_profile(store: &ProfileStore, username: &str) -> Option<LocalProfile> {
-    let username = sanitize_username(username);
-    store
-        .profiles
-        .iter()
-        .find(|profile| profile.username == username)
-        .cloned()
-}
-
 fn sanitize_username(value: &str) -> String {
     let sanitized: String = value
         .trim()
