@@ -31,9 +31,25 @@ use std::time::Duration;
 fn main() {
     install_error_reporting();
 
-    let mut args = std::env::args().skip(1);
+    let mut raw_args: Vec<String> = std::env::args().skip(1).collect();
+    let profile_arg = extract_global_profile(&mut raw_args);
+    if let Some(username) = profile_arg {
+        if let Err(err) = amele::profile::select_profile(&username, false) {
+            report_fatal_error(&err.to_string());
+            eprintln!("{err}");
+            std::process::exit(2);
+        }
+    } else {
+        let _ = amele::profile::bootstrap_profiles();
+    }
+
+    let mut args = raw_args.into_iter();
     let result = match args.next().as_deref() {
         Some("settings-default") => print_default_settings(),
+        Some("profiles") | Some("profile-list") => profile_list_command(),
+        Some("profile-create") => profile_create_command(args.collect()),
+        Some("profile-use") | Some("profile-select") => profile_use_command(args.collect()),
+        Some("profile-logout") => profile_logout_command(),
         Some("hash") => hash_command(args.collect()),
         Some("disk-list") => disk_list_command(),
         Some("local-image") => local_image_command(args.collect()),
@@ -196,8 +212,13 @@ fn print_help() {
     println!(
         "Amele Forensic Tool CLI\n\n\
          Kullanici komutlari:\n\
-           ui                                      Native uygulama penceresini ac\n\
-           ui-browser                              Debug icin tarayicida ac\n\
+          ui                                      Native uygulama penceresini ac\n\
+          ui-browser                              Debug icin tarayicida ac\n\
+           profiles                                Yerel profilleri listele\n\
+           profile-create <isim> <kullanici> [tr|en] [dark|light] [--direct]\n\
+           profile-use <kullanici> [--direct]      CLI/sonraki acilis icin profil sec\n\
+           profile-logout                          Otomatik profil acilisini kapat\n\
+           --profile <kullanici> <komut>           Tek komutu bu profil altinda calistir\n\
            disk-list                               Yerel diskleri listele\n\
            local-image <kaynak> <vaka> [disk_adı] [raw|aff4]  Yerel disk/dosya imaji al\n\
            local-ram <avml|winpmem> <vaka> [arac] [raw|aff4] Yerel RAM imaji al\n\
@@ -247,6 +268,52 @@ fn print_default_settings() -> Result<(), String> {
         serde_json::to_string_pretty(&settings).map_err(|err| err.to_string())?
     );
     Ok(())
+}
+
+/// Yerel profilleri JSON olarak listeler.
+fn profile_list_command() -> Result<(), String> {
+    let state = amele::profile::bootstrap_profiles().map_err(|err| err.to_string())?;
+    print_json(&json!({
+        "profiles": state.profiles,
+        "active_profile": state.active_profile,
+        "base_dir": state.base_dir,
+    }))
+}
+
+/// CLI üzerinden yeni profil oluşturur.
+fn profile_create_command(args: Vec<String>) -> Result<(), String> {
+    let mut args = args;
+    let open_directly = remove_direct_flag(&mut args);
+    if args.len() < 2 {
+        return Err(
+            "Kullanim: profile-create <isim_soyisim> <kullanici> [tr|en] [dark|light] [--direct]"
+                .to_string(),
+        );
+    }
+    let language = args.get(2).map(String::as_str).unwrap_or("tr");
+    let theme = args.get(3).map(String::as_str).unwrap_or("dark");
+    let profile =
+        amele::profile::create_profile(&args[0], &args[1], language, theme, open_directly)
+            .map_err(|err| err.to_string())?;
+    print_json(&profile)
+}
+
+/// CLI üzerinden mevcut profili seçer.
+fn profile_use_command(args: Vec<String>) -> Result<(), String> {
+    let mut args = args;
+    let open_directly = remove_direct_flag(&mut args);
+    if args.is_empty() {
+        return Err("Kullanim: profile-use <kullanici> [--direct]".to_string());
+    }
+    let profile =
+        amele::profile::select_profile(&args[0], open_directly).map_err(|err| err.to_string())?;
+    print_json(&profile)
+}
+
+/// Aktif/otomatik profil seçimini kapatır.
+fn profile_logout_command() -> Result<(), String> {
+    amele::profile::logout_profile().map_err(|err| err.to_string())?;
+    print_json(&json!({ "ok": true }))
 }
 
 /// Verilen dosya için seçilen hash algoritmasını çalıştırır.
@@ -1332,6 +1399,34 @@ fn extract_output_format(args: &mut Vec<String>) -> Result<AcquisitionOutputForm
         }
     }
     AcquisitionOutputFormat::parse(selected.as_deref())
+}
+
+/// Global --profile argümanını komut listesinden ayırır.
+fn extract_global_profile(args: &mut Vec<String>) -> Option<String> {
+    let mut index = 0;
+    while index < args.len() {
+        if args[index] == "--profile" {
+            args.remove(index);
+            if index < args.len() {
+                return Some(args.remove(index));
+            }
+            return None;
+        }
+        if let Some(username) = args[index].strip_prefix("--profile=") {
+            let username = username.to_string();
+            args.remove(index);
+            return Some(username);
+        }
+        index += 1;
+    }
+    None
+}
+
+/// Profil komutlarında otomatik açılış bayrağını ayıklar.
+fn remove_direct_flag(args: &mut Vec<String>) -> bool {
+    let original_len = args.len();
+    args.retain(|arg| arg != "--direct" && arg != "--open-directly");
+    args.len() != original_len
 }
 
 /// JSON çıktıyı stdout'a pretty formatta yazar.
