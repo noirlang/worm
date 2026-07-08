@@ -189,7 +189,12 @@ pub fn classify_error(message: &str) -> ErrorAdvice {
         };
     }
 
-    if lower.contains("hash") || lower.contains("sha256") || lower.contains("md5") {
+    if (lower.contains("hash") || lower.contains("sha256") || lower.contains("md5"))
+        && !lower.contains("verified")
+        && !lower.contains("winget")
+        && !lower.contains("installer")
+        && !lower.contains("download")
+    {
         return ErrorAdvice {
             code: "HASH_CALCULATION_FAILED",
             detail: "Dosya hash hesabi tamamlanamadi.",

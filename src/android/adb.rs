@@ -40,6 +40,9 @@ pub struct AndroidDevice {
 
 /// Sistemde ADB kurulu mu ve çalışıyor mu diye kontrol eder.
 pub fn adb_status() -> AdbStatus {
+    #[cfg(windows)]
+    refresh_windows_path();
+
     crate::logging::runtime_log(
         crate::logging::LogLevel::Debug,
         "android:adb",
@@ -710,4 +713,85 @@ mod tests {
         assert_eq!(devices[1].state, "unauthorized");
         assert_eq!(devices[1].transport_id.as_deref(), Some("2"));
     }
+}
+
+#[cfg(windows)]
+fn refresh_windows_path() {
+    let mut paths = Vec::new();
+
+    // HKCU Path
+    if let Ok(output) = Command::new("reg")
+        .args(["query", "HKCU\\Environment", "/v", "Path"])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(path_val) = parse_reg_path_output(&stdout) {
+                paths.push(path_val);
+            }
+        }
+    }
+
+    // HKLM Path
+    if let Ok(output) = Command::new("reg")
+        .args([
+            "query",
+            "HKLM\\System\\CurrentControlSet\\Control\\Session Manager\\Environment",
+            "/v",
+            "Path",
+        ])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(path_val) = parse_reg_path_output(&stdout) {
+                paths.push(path_val);
+            }
+        }
+    }
+
+    // Winget links default directory
+    if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+        let winget_links = format!("{}\\Microsoft\\WinGet\\Links", localappdata);
+        if std::path::Path::new(&winget_links).exists() {
+            paths.push(winget_links);
+        }
+    }
+
+    if !paths.is_empty() {
+        if let Ok(current_path) = std::env::var("PATH") {
+            let mut all_paths = paths;
+            // Eger listedeki yollar zaten PATH icinde yoksa ekle
+            let current_split: std::collections::HashSet<&str> = current_path.split(';').collect();
+            let mut to_add = Vec::new();
+            for p in &all_paths {
+                if !current_split.contains(p.as_str()) {
+                    to_add.push(p.as_str());
+                }
+            }
+            if !to_add.is_empty() {
+                to_add.push(&current_path);
+                let merged = to_add.join(";");
+                std::env::set_var("PATH", merged);
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+fn parse_reg_path_output(output: &str) -> Option<String> {
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.to_lowercase().starts_with("path") {
+            // Path    REG_EXPAND_SZ    C:\Users\...
+            let parts: Vec<&str> = trimmed
+                .splitn(3, |c: char| c.is_whitespace())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.len() >= 3 {
+                return Some(parts[2].to_string());
+            }
+        }
+    }
+    None
 }

@@ -24,6 +24,8 @@
     <Property Id="ARPURLINFOABOUT" Value="https://amele.noirlang.tr" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.BannerBmp)" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.DialogBmp)" />
 
     <Condition Message="Amele Forensic Tool requires a 64-bit Windows installation.">
       VersionNT64
