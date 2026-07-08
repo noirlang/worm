@@ -7,3 +7,4 @@ fn main() {
 
 #[cfg(not(windows))]
 fn main() {}
+// dostum ben hayal kırıklığıyla savaşıyorum
