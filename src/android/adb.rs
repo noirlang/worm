@@ -756,6 +756,29 @@ fn refresh_windows_path() {
         if std::path::Path::new(&winget_links).exists() {
             paths.push(winget_links);
         }
+
+        // Winget Packages altindaki asil Google.PlatformTools dizinlerini de tara ve ekle
+        let packages_dir = format!("{}\\Microsoft\\WinGet\\Packages", localappdata);
+        if let Ok(entries) = std::fs::read_dir(&packages_dir) {
+            for entry in entries.flatten() {
+                if let Ok(file_name) = entry.file_name().into_string() {
+                    if file_name.to_lowercase().contains("google.platformtools") {
+                        let path = entry.path().join("platform-tools");
+                        if path.exists() {
+                            if let Some(path_str) = path.to_str() {
+                                paths.push(path_str.to_string());
+                            }
+                        }
+                        let path_self = entry.path();
+                        if path_self.exists() {
+                            if let Some(path_str) = path_self.to_str() {
+                                paths.push(path_str.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if !paths.is_empty() {
