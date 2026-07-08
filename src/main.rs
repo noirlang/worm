@@ -27,11 +27,33 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
+static IS_ENGLISH: AtomicBool = AtomicBool::new(false);
+
+fn set_cli_english(val: bool) {
+    IS_ENGLISH.store(val, Ordering::SeqCst);
+}
+
+fn is_cli_english() -> bool {
+    IS_ENGLISH.load(Ordering::SeqCst)
+}
+
+fn t_cli(tr: &str, en: &str) -> String {
+    if is_cli_english() {
+        en.to_string()
+    } else {
+        tr.to_string()
+    }
+}
+
 /// CLI argümanını okuyup ilgili alt komutu veya UI modunu çalıştırır.
 fn main() {
     install_error_reporting();
 
     let mut raw_args: Vec<String> = std::env::args().skip(1).collect();
+    let is_en = extract_global_en_flag(&mut raw_args);
+    if is_en {
+        set_cli_english(true);
+    }
     let profile_arg = extract_global_profile(&mut raw_args);
     if let Some(username) = profile_arg {
         if let Err(err) = amele::profile::select_profile(&username, false) {
@@ -92,7 +114,11 @@ fn main() {
             Ok(())
         }
         None => default_command(),
-        Some(other) => Err(format!("Bilinmeyen komut: {other}")),
+        Some(other) => Err(format!(
+            "{} {}",
+            t_cli("Bilinmeyen komut:", "Unknown command:"),
+            other
+        )),
     };
 
     if let Err(err) = result {
@@ -107,7 +133,10 @@ fn main() {
 
 /// Sadece kullanıcı komutu yanlış yazdığında genel yardım basar.
 fn should_print_help_on_error(err: &str) -> bool {
-    err.starts_with("Kullanim:") || err.starts_with("Bilinmeyen komut:")
+    err.starts_with("Kullanim:")
+        || err.starts_with("Bilinmeyen komut:")
+        || err.starts_with("Usage:")
+        || err.starts_with("Unknown command:")
 }
 
 #[cfg(target_os = "windows")]
@@ -209,55 +238,107 @@ mod windows_error {
 
 /// Kullanıcıya desteklenen teknik CLI komutlarını gösterir.
 fn print_help() {
-    println!(
-        "Amele Forensic Tool CLI\n\n\
-         Kullanici komutlari:\n\
-          ui                                      Native uygulama penceresini ac\n\
-          ui-browser                              Debug icin tarayicida ac\n\
-           profiles                                Yerel profilleri listele\n\
-           profile-create <isim> <kullanici> [tr|en] [dark|light] [--direct]\n\
-           profile-use <kullanici> [--direct]      CLI/sonraki acilis icin profil sec\n\
-           profile-logout                          Otomatik profil acilisini kapat\n\
-           --profile <kullanici> <komut>           Tek komutu bu profil altinda calistir\n\
-           disk-list                               Yerel diskleri listele\n\
-           local-image <kaynak> <vaka> [disk_adı] [raw|aff4]  Yerel disk/dosya imaji al\n\
-           local-ram <avml|winpmem> <vaka> [arac] [raw|aff4] Yerel RAM imaji al\n\
-           remote-disks <ip> <port> [token]        Uzak agent disklerini listele\n\
-           remote-image <ip> <port> <disk_id> <cikti_klasoru> [token] [raw|aff4]\n\
-           remote-ram <ip> <port> <vaka> [token] [raw|aff4] Uzak agent RAM imaji al\n\
-           adb-status                              ADB kurulumunu kontrol et\n\
-           adb-install                             ADB'yi sistem paket yöneticisiyle kur\n\
-           android-devices                         Android cihazlarini listele\n\
-           android-profile <serial>                Android cihaz profilini yazdir\n\
-           android-logical <serial> <vaka> [quick|full|root|volatile]\n\
-           android-filesystem <serial> <vaka> [--root]\n\
-           android-ram <serial> <vaka> [volatile|root|physical] [--root]\n\
-           android-capabilities <serial>            Android edinim uygunluk raporu\n\
-           android-lemon-preflight <serial>         Lemon fiziksel RAM uygunluk kontrolu\n\
-           android-remote-connect <host> [port] [tcp|mesh] [etiket]\n\
-           android-remote-disconnect <serial>       Uzak Android ADB baglantisini kes\n\
-           android-case-analysis <vaka>             Android vaka cikti analiz ozeti\n\
-           image-analyze <imaj> [mount_klasoru]    Disk imaj analiz ozeti\n\
-           ram-summary <ram> <windows|linux> [symbols]\n\
-           ram-strings <ram>                       RAM IOC/dizgi taramasi\n\
-           ram-carve <ram> <cikti_klasoru>         RAM dosya carving\n\
-           ram-processes <ram> <windows|linux> [symbols]\n\
-           hash <dosya> [algoritma]                md5/sha1/sha256/sha512 hash hesapla\n\
-           verify <imaj> <sha256>                  SHA256 imaj dogrulama yap\n\
-           wireguard-config <dosya>                Varsayilan WireGuard config uret\n\n\
-         Komutlar:\n\
-           settings-default              Varsayilan ayarlari JSON olarak yazdir\n\
-           disk-list-helper <json>        Yetkili disk listeleme yardimci komutu\n\
-           image-helper <req> <res> <prg> [ctrl] Yetkili imaj alma yardimci komutu\n\
-           ram-helper <req> <res> <prg> <ctrl> Yetkili RAM alma yardimci komutu\n\
-           avml-install-helper <kaynak> <res> Yetkili AVML kurulum yardimci komutu\n\
-           winpmem-install-helper <kaynak> <res> Yetkili WinPMEM kurulum yardimci komutu\n\
-           mount-helper <req> <res>       Yetkili imaj mount yardimci komutu\n\
-           disk-size <cihaz|dosya>       Disk veya dosya boyutu al\n\
-           remote-tool-check <ip> <port> <winpmem|avml> [token]\n\
-           ram-status                    Yerel AVML/WinPMEM durumunu yazdir\n\
-         Not: paketlerde ana komut amele-forensic-tool'dur; geriye uyumluluk icin amele alias'i da bulunabilir."
-    );
+    if is_cli_english() {
+        println!(
+            "Amele Forensic Tool CLI\n\n\
+             User commands:\n\
+              ui                                      Open native application window\n\
+              ui-browser                              Open in browser for debugging\n\
+               profiles                               List local profiles\n\
+               profile-create <name> <user> [tr|en] [dark|light] [--direct]\n\
+               profile-use <user> [--direct]           Select profile for CLI/next launch\n\
+               profile-logout                          Disable automatic profile login\n\
+               --profile <user> <command>              Execute single command under this profile\n\
+               disk-list                               List local disks\n\
+               local-image <src> <case> [disk_name] [raw|aff4]  Acquire local disk/file image\n\
+               local-ram <avml|winpmem> <case> [tool] [raw|aff4] Acquire local RAM image\n\
+               remote-disks <ip> <port> [token]        List remote agent disks\n\
+               remote-image <ip> <port> <disk_id> <out_dir> [token] [raw|aff4]\n\
+               remote-ram <ip> <port> <case> [token] [raw|aff4] Acquire remote agent RAM image\n\
+               adb-status                              Check ADB installation status\n\
+               adb-install                             Install ADB via system package manager\n\
+               android-devices                         List connected Android devices\n\
+               android-profile <serial>                Print Android device profile information\n\
+               android-logical <serial> <case> [quick|full|root|volatile]\n\
+               android-filesystem <serial> <case> [--root]\n\
+               android-ram <serial> <case> [volatile|root|physical] [--root]\n\
+               android-capabilities <serial>            Android acquisition compatibility report\n\
+               android-lemon-preflight <serial>         Lemon physical RAM compatibility check\n\
+               android-remote-connect <host> [port] [tcp|mesh] [label]\n\
+               android-remote-disconnect <serial>       Disconnect remote Android ADB connection\n\
+               android-case-analysis <case>             Android case output analysis summary\n\
+               image-analyze <image> [mount_dir]       Disk image analysis summary\n\
+               ram-summary <ram> <windows|linux> [symbols]\n\
+               ram-strings <ram>                       RAM IOC/string scan\n\
+               ram-carve <ram> <out_dir>               RAM file carving\n\
+               ram-processes <ram> <windows|linux> [symbols]\n\
+               hash <file> [algorithm]                 Calculate md5/sha1/sha256/sha512 hash\n\
+               verify <image> <sha256>                 Verify SHA256 image checksum\n\
+               wireguard-config <file>                 Generate default WireGuard config\n\n\
+             Commands:\n\
+               settings-default              Print default settings as JSON\n\
+               disk-list-helper <json>        Authorized disk listing helper command\n\
+               image-helper <req> <res> <prg> [ctrl] Authorized image acquisition helper command\n\
+               ram-helper <req> <res> <prg> <ctrl> Authorized RAM acquisition helper command\n\
+               avml-install-helper <src> <res> Authorized AVML installation helper command\n\
+               winpmem-install-helper <src> <res> Authorized WinPMEM installation helper command\n\
+               mount-helper <req> <res>       Authorized image mount helper command\n\
+               disk-size <device|file>       Get disk or file size\n\
+               remote-tool-check <ip> <port> <winpmem|avml> [token]\n\
+               ram-status                    Print local AVML/WinPMEM status\n\n\
+             Note: the main binary command is amele-forensic-tool; amele alias is also available for backward compatibility."
+        );
+    } else {
+        println!(
+            "Amele Forensic Tool CLI\n\n\
+             Kullanici komutlari:\n\
+              ui                                      Native uygulama penceresini ac\n\
+              ui-browser                              Debug icin tarayicida ac\n\
+               profiles                                Yerel profilleri listele\n\
+               profile-create <isim> <kullanici> [tr|en] [dark|light] [--direct]\n\
+               profile-use <kullanici> [--direct]      CLI/sonraki acilis icin profil sec\n\
+               profile-logout                          Otomatik profil acilisini kapat\n\
+               --profile <kullanici> <komut>           Tek komutu bu profil altinda calistir\n\
+               disk-list                               Yerel diskleri listele\n\
+               local-image <kaynak> <vaka> [disk_adı] [raw|aff4]  Yerel disk/dosya imaji al\n\
+               local-ram <avml|winpmem> <vaka> [arac] [raw|aff4] Yerel RAM imaji al\n\
+               remote-disks <ip> <port> [token]        Uzak agent disklerini listele\n\
+               remote-image <ip> <port> <disk_id> <cikti_klasoru> [token] [raw|aff4]\n\
+               remote-ram <ip> <port> <vaka> [token] [raw|aff4] Uzak agent RAM imaji al\n\
+               adb-status                              ADB kurulumunu kontrol et\n\
+               adb-install                             ADB'yi sistem paket yöneticisiyle kur\n\
+               android-devices                         Android cihazlarini listele\n\
+               android-profile <serial>                Android cihaz profilini yazdir\n\
+               android-logical <serial> <vaka> [quick|full|root|volatile]\n\
+               android-filesystem <serial> <vaka> [--root]\n\
+               android-ram <serial> <vaka> [volatile|root|physical] [--root]\n\
+               android-capabilities <serial>            Android edinim uygunluk raporu\n\
+               android-lemon-preflight <serial>         Lemon fiziksel RAM uygunluk kontrolu\n\
+               android-remote-connect <host> [port] [tcp|mesh] [etiket]\n\
+               android-remote-disconnect <serial>       Uzak Android ADB baglantisini kes\n\
+               android-case-analysis <vaka>             Android vaka cikti analiz ozeti\n\
+               image-analyze <imaj> [mount_klasoru]    Disk imaj analiz ozeti\n\
+               ram-summary <ram> <windows|linux> [symbols]\n\
+               ram-strings <ram>                       RAM IOC/dizgi taramasi\n\
+               ram-carve <ram> <cikti_klasoru>         RAM dosya carving\n\
+               ram-processes <ram> <windows|linux> [symbols]\n\
+               hash <dosya> [algoritma]                md5/sha1/sha256/sha512 hash hesapla\n\
+               verify <imaj> <sha256>                  SHA256 imaj dogrulama yap\n\
+               wireguard-config <dosya>                Varsayilan WireGuard config uret\n\n\
+             Komutlar:\n\
+               settings-default              Varsayilan ayarlari JSON olarak yazdir\n\
+               disk-list-helper <json>        Yetkili disk listeleme yardimci komutu\n\
+               image-helper <req> <res> <prg> [ctrl] Yetkili imaj alma yardimci komutu\n\
+               ram-helper <req> <res> <prg> <ctrl> Yetkili RAM alma yardimci komutu\n\
+               avml-install-helper <kaynak> <res> Yetkili AVML kurulum yardimci komutu\n\
+               winpmem-install-helper <kaynak> <res> Yetkili WinPMEM kurulum yardimci komutu\n\
+               mount-helper <req> <res>       Yetkili imaj mount yardimci komutu\n\
+               disk-size <cihaz|dosya>       Disk veya dosya boyutu al\n\
+               remote-tool-check <ip> <port> <winpmem|avml> [token]\n\
+               ram-status                    Yerel AVML/WinPMEM durumunu yazdir\n\n\
+             Not: paketlerde ana komut amele-forensic-tool'dur; geriye uyumluluk icin amele alias'i da bulunabilir."
+        );
+    }
 }
 
 /// Varsayılan uygulama ayarlarını JSON olarak stdout'a yazar.
@@ -285,10 +366,10 @@ fn profile_create_command(args: Vec<String>) -> Result<(), String> {
     let mut args = args;
     let open_directly = remove_direct_flag(&mut args);
     if args.len() < 2 {
-        return Err(
-            "Kullanim: profile-create <isim_soyisim> <kullanici> [tr|en] [dark|light] [--direct]"
-                .to_string(),
-        );
+        return Err(t_cli(
+            "Kullanim: profile-create <isim_soyisim> <kullanici> [tr|en] [dark|light] [--direct]",
+            "Usage: profile-create <full_name> <username> [tr|en] [dark|light] [--direct]",
+        ));
     }
     let language = args.get(2).map(String::as_str).unwrap_or("tr");
     let theme = args.get(3).map(String::as_str).unwrap_or("dark");
@@ -303,7 +384,10 @@ fn profile_use_command(args: Vec<String>) -> Result<(), String> {
     let mut args = args;
     let open_directly = remove_direct_flag(&mut args);
     if args.is_empty() {
-        return Err("Kullanim: profile-use <kullanici> [--direct]".to_string());
+        return Err(t_cli(
+            "Kullanim: profile-use <kullanici> [--direct]",
+            "Usage: profile-use <username> [--direct]",
+        ));
     }
     let profile =
         amele::profile::select_profile(&args[0], open_directly).map_err(|err| err.to_string())?;
@@ -319,7 +403,10 @@ fn profile_logout_command() -> Result<(), String> {
 /// Verilen dosya için seçilen hash algoritmasını çalıştırır.
 fn hash_command(args: Vec<String>) -> Result<(), String> {
     if args.is_empty() {
-        return Err("Kullanim: hash <dosya> [algoritma]".to_string());
+        return Err(t_cli(
+            "Kullanim: hash <dosya> [algoritma]",
+            "Usage: hash <file> [algorithm]",
+        ));
     }
     let path = PathBuf::from(&args[0]);
     let algorithm = args
@@ -342,7 +429,10 @@ fn local_image_command(args: Vec<String>) -> Result<(), String> {
     let mut args = args;
     let selected_format = extract_output_format(&mut args)?;
     if args.len() < 2 {
-        return Err("Kullanim: local-image <kaynak> <vaka> [disk_adı] [raw|aff4]".to_string());
+        return Err(t_cli(
+            "Kullanim: local-image <kaynak> <vaka> [disk_adı] [raw|aff4]",
+            "Usage: local-image <source> <case> [disk_name] [raw|aff4]",
+        ));
     }
     let source = PathBuf::from(&args[0]);
     let vault = cli_case_vault(&args[1])?;
@@ -386,7 +476,10 @@ fn local_ram_command(args: Vec<String>) -> Result<(), String> {
     let mut args = args;
     let selected_format = extract_output_format(&mut args)?;
     if args.len() < 2 {
-        return Err("Kullanim: local-ram <avml|winpmem> <vaka> [arac_yolu] [raw|aff4]".to_string());
+        return Err(t_cli(
+            "Kullanim: local-ram <avml|winpmem> <vaka> [arac_yolu] [raw|aff4]",
+            "Usage: local-ram <avml|winpmem> <case> [tool_path] [raw|aff4]",
+        ));
     }
     let tool = args[0].to_ascii_lowercase();
     let vault = cli_case_vault(&args[1])?;
@@ -422,7 +515,10 @@ fn remote_ram_command(args: Vec<String>) -> Result<(), String> {
     let mut args = args;
     let selected_format = extract_output_format(&mut args)?;
     if args.len() < 3 {
-        return Err("Kullanim: remote-ram <ip> <port> <vaka> [token] [raw|aff4]".to_string());
+        return Err(t_cli(
+            "Kullanim: remote-ram <ip> <port> <vaka> [token] [raw|aff4]",
+            "Usage: remote-ram <ip> <port> <case> [token] [raw|aff4]",
+        ));
     }
     let ip = &args[0];
     let port = parse_port(&args[1])?;
@@ -1427,6 +1523,19 @@ fn extract_global_profile(args: &mut Vec<String>) -> Option<String> {
     None
 }
 
+/// Global --en bayrağını komut listesinden ayıklar.
+fn extract_global_en_flag(args: &mut Vec<String>) -> bool {
+    let mut index = 0;
+    while index < args.len() {
+        if args[index] == "--en" {
+            args.remove(index);
+            return true;
+        }
+        index += 1;
+    }
+    false
+}
+
 /// Profil komutlarında otomatik açılış bayrağını ayıklar.
 fn remove_direct_flag(args: &mut Vec<String>) -> bool {
     let original_len = args.len();
@@ -1479,7 +1588,10 @@ fn disk_size_command(args: Vec<String>) -> Result<(), String> {
 
 fn verify_command(args: Vec<String>) -> Result<(), String> {
     if args.len() != 2 {
-        return Err("Kullanim: verify <imaj> <sha256>".to_string());
+        return Err(t_cli(
+            "Kullanim: verify <imaj> <sha256>",
+            "Usage: verify <image> <sha256>",
+        ));
     }
     let ok = disk::verify_image(&args[0], &args[1]).map_err(|err| err.to_string())?;
     println!("{}", if ok { "OK" } else { "FAIL" });
@@ -1488,7 +1600,10 @@ fn verify_command(args: Vec<String>) -> Result<(), String> {
 
 fn remote_disks_command(args: Vec<String>) -> Result<(), String> {
     if args.len() < 2 {
-        return Err("Kullanim: remote-disks <ip> <port> [token]".to_string());
+        return Err(t_cli(
+            "Kullanim: remote-disks <ip> <port> [token]",
+            "Usage: remote-disks <ip> <port> [token]",
+        ));
     }
     let port = parse_port(&args[1])?;
     let token = args.get(2).cloned();
@@ -1506,10 +1621,10 @@ fn remote_image_command(args: Vec<String>) -> Result<(), String> {
     let mut args = args;
     let selected_format = extract_output_format(&mut args)?;
     if args.len() < 4 {
-        return Err(
-            "Kullanim: remote-image <ip> <port> <disk_id> <cikti_klasoru> [token] [raw|aff4]"
-                .to_string(),
-        );
+        return Err(t_cli(
+            "Kullanim: remote-image <ip> <port> <disk_id> <cikti_klasoru> [token] [raw|aff4]",
+            "Usage: remote-image <ip> <port> <disk_id> <out_dir> [token] [raw|aff4]",
+        ));
     }
     let port = parse_port(&args[1])?;
     let token = args.get(4).cloned();

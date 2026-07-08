@@ -152,3 +152,158 @@ Commits without the `[build]` tag will be pushed to the `dev` branch but will no
 
 **Manual Build:** You can also trigger the build workflow manually from the "Actions" tab in GitHub by clicking "Run workflow".
 
+---
+
+<div align="center">
+
+<img src="ui/assets/logo/logo.png" alt="Amele Logo" width="120" />
+
+# Amele Adli Bilişim Aracı (Forensic Tool)
+
+*Dijital delilleri tek bir yerde toplayın. Disk, RAM ve Android edinimi.*
+
+[Web Sitesi](https://amele.noirlang.tr) | [Sürümler](https://github.com/noirlang/amele/releases) | [Katkıda Bulunma](CONTRIBUTING.md) | [Güvenlik](SECURITY.md) | [Linux Ajanı](https://github.com/noirlang/amele-linux) | [Windows Ajanı](https://github.com/noirlang/amele-win)
+
+<img src="amele.gif" alt="Amele Forensic Tool Demo" width="700" />
+
+</div>
+
+## Genel Bakış
+
+Amele, yetkili incelemeler için geliştirilmiş bir masaüstü adli edinim aracıdır. Disk imajı alma, bellek (RAM) edinimi, Android veri toplama, hash doğrulama, vaka çıktısı yönetimi, imaj görüntüleme ve raporlama özelliklerini tek bir yerel uygulamada bir araya getirir.
+
+Uygulama Linux ve Windows üzerinde gerçek bir masaüstü penceresi olarak çalışır.
+
+## Özellikler
+
+- **Yerel disk edinimi:** Yerel disklerden veya imaj dosyalarından ham (raw) disk imajları oluşturun.
+- **Uzak disk edinimi:** Linux ve Windows ajanları (agents) aracılığıyla uzak disk imajları toplayın.
+- **Yerel bellek (RAM) edinimi:** Linux üzerinde AVML ve Windows üzerinde WinPMEM ile RAM bellek kopyasını alın.
+- **Uzak bellek (RAM) edinimi:** Ajanlar üzerinden RAM edinimini başlatın, duraklatın, sürdürün, durdurun, izleyin ve RAM dökümlerini indirin.
+- **Android araçları:** ADB durumunu kontrol edin, cihazları listeleyin, mantıksal veri toplayın, dosya sistemi verisi toplayın, uçucu (volatile) verileri alın ve Android vaka çıktılarını analiz edin.
+- **Vaka yönetimi:** Edinimleri, notları, hash değerlerini, Android çıktılarını ve raporları seçilen vakalar altında saklayın.
+- **Hash hesaplama ve doğrulama:** MD5, SHA1, SHA256 ve SHA512 hesaplayın; elde edilen deliller için yan dosya (sidecar) hash dosyaları oluşturun.
+- **İmaj görüntüleme:** Desteklenen imajları inceleme amacıyla salt okunur (read-only) olarak bağlayın (mount).
+- **Raporlar:** Toplanan çıktılardan ve notlardan vaka raporları oluşturun.
+- **Güncellemeler:** Uygulama içerisinden GitHub sürümlerini kontrol edin ve platform yükleyicilerini indirin.
+
+## İndirmeler
+
+Kararlı sürümler GitHub Sürümleri (Releases) sayfasında ve web sitesinde yayınlanmaktadır.
+
+- Linux AppImage: `amele-linux-x64.AppImage`
+- Linux DEB: `amele-linux-x64.deb`
+- Linux RPM: `amele-linux-x64.rpm`
+- Arch Linux Paketi: `amele-linux-x64.pkg.tar.zst`
+- Windows MSI: `amele-windows-x64.msi`
+
+Ajan (Agent) ikili dosyaları:
+
+```text
+https://amele.noirlang.tr/amele-linux
+https://amele.noirlang.tr/amele-win.exe
+```
+
+## Derleme Gereksinimleri
+
+Stabil Rust araç zincirini (toolchain) kurun:
+
+```bash
+rustup toolchain install stable --component rustfmt
+rustup default stable
+```
+
+Linux geliştirme paketleri:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
+```
+
+Windows derlemeleri, hedef sistemde Microsoft Edge WebView2 Çalışma Zamanı (Runtime) gerektirir.
+
+## Derleme
+
+Geliştirici (Debug) derlemesi:
+
+```bash
+cargo build --locked
+```
+
+Kararlı (Release) derlemesi:
+
+```bash
+cargo build --release --locked
+```
+
+Testleri ve kontrolleri çalıştırın:
+
+```bash
+cargo test --locked
+cargo fmt --all -- --check
+node --check ui/app.js
+```
+
+Linux AppImage derleme:
+
+```bash
+./scripts/build-appimage.sh
+```
+
+Linux DEB, RPM ve Arch paketlerini derleme:
+
+```bash
+./scripts/build-linux-packages.sh
+```
+
+## Çalıştırma
+
+Yerel masaüstü uygulamasını başlatın:
+
+```bash
+cargo run -- ui
+```
+
+Kararlı ikili dosyayı çalıştırın:
+
+```bash
+./target/release/amele ui
+```
+
+Tarayıcı tabanlı hata ayıklama arayüzünü (debug UI) açın:
+
+```bash
+cargo run -- ui-browser
+```
+
+## Ajanlar (Agents)
+
+Hedef makinede Linux ajanını çalıştırın:
+
+```bash
+wget -O amele-linux https://amele.noirlang.tr/amele-linux
+chmod +x amele-linux
+./amele-linux
+```
+
+Windows ajanını indirin:
+
+```text
+https://amele.noirlang.tr/amele-win.exe
+```
+
+IP adresi, port ve isteğe bağlı token ile uygulama içerisinden ajana bağlanın.
+
+## CI/CD / Otomatik Derlemeler
+
+Bu proje, otomatik derleme ve paketleme işlemleri için **GitHub Actions** kullanmaktadır.
+
+Sunucu (runner) kaynaklarını tasarruflu kullanmak amacıyla, tam sürüm derlemeleri ve ön sürümler (prerelease) yalnızca commit mesajı `[build]` etiketini içerdiğinde tetiklenir:
+
+```bash
+git commit -m "feat: add new feature [build]"
+```
+
+`[build]` etiketi içermeyen commit'ler `dev` dalına pushlanır ancak derleme iş akışlarını tetiklemez.
+
+**Manuel Derleme:** GitHub'daki "Actions" sekmesinden "Run workflow" seçeneğine tıklayarak derleme iş akışını manuel olarak da tetikleyebilirsiniz.
