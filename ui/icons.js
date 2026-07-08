@@ -37,7 +37,7 @@ export const icons = {
 export const fontIcons = {};
 
 export function icon(name) {
-  const isFilled = ["android", "github", "linkedin", "linux", "windows"].includes(name);
+  const isFilled = ["android", "github", "linkedin", "linux", "windows", "website", "globe"].includes(name);
   const className = isFilled ? ' class="svg-fill"' : '';
   let viewBox = "0 0 24 24";
   if (name === "linux") viewBox = "0 0 448 512";
