@@ -1697,6 +1697,16 @@ svg {
   stroke-linejoin: round;
 }
 
+svg.svg-fill {
+  fill: currentColor !important;
+  stroke: none !important;
+}
+
+svg.svg-fill path {
+  fill: currentColor !important;
+  stroke: none !important;
+}
+
 @media (max-width: 1180px) {
   .tool-grid,
   .other-grid {
