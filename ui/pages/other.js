@@ -203,7 +203,8 @@ export function aboutPage({ t, icon, APP_VERSION, assetPath, theme }) {
         ], assetPath, icon)}
         ${contributorCard("YT", "Yusuf Tuncel", t("about.role.windows"), "yusuf-tuncel.jpg", [
           ["GitHub", "https://github.com/yetece1"],
-          ["LinkedIn", "https://www.linkedin.com/in/yusuf-tuncel/"]
+          ["LinkedIn", "https://www.linkedin.com/in/yusuf-tuncel/"],
+          ["Website", "https://yusuftuncel.tr"]
         ], assetPath, icon)}
         ${contributorCard("MG", "Muhammet Ali Güner", t("about.role.linux"), "muhammet-ali-guner.jpg", [
           ["GitHub", "https://github.com/kafkaskrtl"],
