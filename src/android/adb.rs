@@ -760,7 +760,7 @@ fn refresh_windows_path() {
 
     if !paths.is_empty() {
         if let Ok(current_path) = std::env::var("PATH") {
-            let mut all_paths = paths;
+            let all_paths = paths;
             // Eger listedeki yollar zaten PATH icinde yoksa ekle
             let current_split: std::collections::HashSet<&str> = current_path.split(';').collect();
             let mut to_add = Vec::new();
@@ -772,7 +772,9 @@ fn refresh_windows_path() {
             if !to_add.is_empty() {
                 to_add.push(&current_path);
                 let merged = to_add.join(";");
-                std::env::set_var("PATH", merged);
+                unsafe {
+                    std::env::set_var("PATH", merged);
+                }
             }
         }
     }
