@@ -13,8 +13,6 @@ $BinaryPath = Join-Path $RootDir "target\release\amele.exe"
 $ProductWxs = Join-Path $RootDir "packaging\windows\amele.wxs"
 $LicenseRtf = Join-Path $RootDir "packaging\windows\license.rtf"
 $IconPath = Join-Path $RootDir "packaging\windows\amele.ico"
-$BannerBmp = Join-Path $RootDir "packaging\windows\banner.bmp"
-$DialogBmp = Join-Path $RootDir "packaging\windows\dialog.bmp"
 
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $DistDir "amele-windows-x64.msi"
@@ -101,17 +99,22 @@ Invoke-CheckedCommand -Command $Heat -Arguments @(
 Invoke-CheckedCommand -Command $Candle -Arguments @(
     "-nologo", "-arch", "x64", "-dProductVersion=$Version",
     "-dAmeleIcon=$IconPath", "-dLicenseRtf=$LicenseRtf",
-    "-dBannerBmp=$BannerBmp", "-dDialogBmp=$DialogBmp",
     "-out", $ProductObject, $ProductWxs
 )
 Invoke-CheckedCommand -Command $Candle -Arguments @(
     "-nologo", "-arch", "x64", "-dStageDir=$StageDir",
     "-out", $HarvestedObject, $HarvestedWxs
 )
-Invoke-CheckedCommand -Command $Light -Arguments @(
-    "-nologo", "-ext", "WixUIExtension", "-cultures:en-us",
-    "-sice:ICE61", "-sice:ICE60",
-    "-out", $OutputPath, $ProductObject, $HarvestedObject
-)
+Push-Location $RootDir
+try {
+    Invoke-CheckedCommand -Command $Light -Arguments @(
+        "-nologo", "-ext", "WixUIExtension", "-cultures:en-us",
+        "-sice:ICE61", "-sice:ICE60",
+        "-out", $OutputPath, $ProductObject, $HarvestedObject
+    )
+}
+finally {
+    Pop-Location
+}
 
 Write-Host "Windows MSI written to $OutputPath"
