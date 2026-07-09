@@ -293,8 +293,33 @@ fn adb_install_command() -> Result<InstallCommand, String> {
 
     #[cfg(target_os = "linux")]
     {
-        let base = linux_adb_install_base_command()?;
-        return Ok(elevate_linux_install_command(base));
+        let cmd_str = "(curl -L -o /tmp/platform-tools.zip https://dl.google.com/android/repository/platform-tools-latest-linux.zip || \
+                       wget -O /tmp/platform-tools.zip https://dl.google.com/android/repository/platform-tools-latest-linux.zip) && \
+                       unzip -o /tmp/platform-tools.zip -d /tmp && \
+                       cp /tmp/platform-tools/adb /usr/bin/adb && \
+                       cp /tmp/platform-tools/fastboot /usr/bin/fastboot && \
+                       chmod +x /usr/bin/adb /usr/bin/fastboot && \
+                       rm -rf /tmp/platform-tools.zip /tmp/platform-tools";
+
+        let program = if command_path("pkexec").is_some() {
+            "pkexec".to_string()
+        } else if command_path("sudo").is_some() {
+            "sudo".to_string()
+        } else {
+            "sh".to_string()
+        };
+
+        let args = if program == "pkexec" || program == "sudo" {
+            vec!["sh".to_string(), "-c".to_string(), cmd_str.to_string()]
+        } else {
+            vec!["-c".to_string(), cmd_str.to_string()]
+        };
+
+        return Ok(InstallCommand {
+            manager: "google-direct".to_string(),
+            program,
+            args,
+        });
     }
 
     #[cfg(not(any(windows, target_os = "linux")))]
@@ -303,123 +328,6 @@ fn adb_install_command() -> Result<InstallCommand, String> {
     }
 }
 
-#[cfg(target_os = "linux")]
-fn linux_adb_install_base_command() -> Result<InstallCommand, String> {
-    if command_path("pacman").is_some() {
-        return Ok(InstallCommand {
-            manager: "pacman".to_string(),
-            program: "pacman".to_string(),
-            args: vec![
-                "-S".to_string(),
-                "--needed".to_string(),
-                "--noconfirm".to_string(),
-                "android-tools".to_string(),
-            ],
-        });
-    }
-    if command_path("apt-get").is_some() {
-        return Ok(InstallCommand {
-            manager: "apt-get".to_string(),
-            program: "apt-get".to_string(),
-            args: vec![
-                "install".to_string(),
-                "-y".to_string(),
-                "android-tools-adb".to_string(),
-                "android-sdk-platform-tools-common".to_string(),
-            ],
-        });
-    }
-    if command_path("dnf").is_some() {
-        return Ok(InstallCommand {
-            manager: "dnf".to_string(),
-            program: "dnf".to_string(),
-            args: vec![
-                "install".to_string(),
-                "-y".to_string(),
-                "android-tools".to_string(),
-            ],
-        });
-    }
-    if command_path("yum").is_some() {
-        return Ok(InstallCommand {
-            manager: "yum".to_string(),
-            program: "yum".to_string(),
-            args: vec![
-                "install".to_string(),
-                "-y".to_string(),
-                "android-tools".to_string(),
-            ],
-        });
-    }
-    if command_path("zypper").is_some() {
-        return Ok(InstallCommand {
-            manager: "zypper".to_string(),
-            program: "zypper".to_string(),
-            args: vec![
-                "--non-interactive".to_string(),
-                "install".to_string(),
-                "android-tools".to_string(),
-            ],
-        });
-    }
-    if command_path("apk").is_some() {
-        return Ok(InstallCommand {
-            manager: "apk".to_string(),
-            program: "apk".to_string(),
-            args: vec!["add".to_string(), "android-tools".to_string()],
-        });
-    }
-
-    Err("Desteklenen paket yöneticisi bulunamadı. Arch/pacman, Debian/apt-get, Fedora/dnf, RHEL/yum, openSUSE/zypper veya Alpine/apk gerekli.".to_string())
-}
-
-#[cfg(target_os = "linux")]
-fn elevate_linux_install_command(base: InstallCommand) -> InstallCommand {
-    if is_effective_root() {
-        return base;
-    }
-    if command_path("pkexec").is_some() {
-        let mut args = Vec::with_capacity(base.args.len() + 1);
-        args.push(base.program);
-        args.extend(base.args);
-        return InstallCommand {
-            manager: format!("pkexec+{}", base.manager),
-            program: "pkexec".to_string(),
-            args,
-        };
-    }
-    if command_path("sudo").is_some() {
-        let mut args = Vec::with_capacity(base.args.len() + 1);
-        args.push(base.program);
-        args.extend(base.args);
-        return InstallCommand {
-            manager: format!("sudo+{}", base.manager),
-            program: "sudo".to_string(),
-            args,
-        };
-    }
-    InstallCommand {
-        manager: base.manager,
-        program: base.program,
-        args: base.args,
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn is_effective_root() -> bool {
-    Command::new("id")
-        .arg("-u")
-        .output()
-        .ok()
-        .and_then(|output| {
-            output
-                .status
-                .success()
-                .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
-        })
-        .as_deref()
-        == Some("0")
-}
 
 fn run_adb_devices_output() -> Result<std::process::Output, String> {
     Command::new("adb")
