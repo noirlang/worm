@@ -328,7 +328,6 @@ fn adb_install_command() -> Result<InstallCommand, String> {
     }
 }
 
-
 fn run_adb_devices_output() -> Result<std::process::Output, String> {
     Command::new("adb")
         .args(["devices", "-l"])

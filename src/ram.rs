@@ -163,17 +163,38 @@ where
         }
 
         let total = physical_ram_size();
+
+        // AVML surumunun alt komut (acquire) isteyip istemedigini --help ile kontrol et
+        let use_acquire = match Command::new(&avml).arg("--help").output() {
+            Ok(output) if output.status.success() => {
+                let help_text = String::from_utf8_lossy(&output.stdout);
+                help_text.contains("acquire")
+            }
+            Ok(output) => {
+                let help_text = String::from_utf8_lossy(&output.stderr);
+                help_text.contains("acquire")
+            }
+            Err(_) => false,
+        };
+
         runtime_log(
             LogLevel::Info,
             "ram",
             format!(
-                "AVML komutu calistiriliyor: {} {}",
+                "AVML komutu calistiriliyor: {} (acquire subcommand: {}) {}",
                 avml.display(),
+                use_acquire,
                 output_file.as_ref().display()
             ),
         );
-        let mut child = Command::new(&avml)
-            .arg(output_file.as_ref())
+
+        let mut cmd = Command::new(&avml);
+        if use_acquire {
+            cmd.arg("acquire");
+        }
+        cmd.arg(output_file.as_ref());
+
+        let mut child = cmd
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
