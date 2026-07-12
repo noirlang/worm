@@ -315,14 +315,9 @@ where
             vec![
                 winpmem.clone().into_os_string(),
                 "acquire".into(),
-                "--output".into(),
+                "--format".into(),
+                "raw".into(),
                 output_file.as_ref().as_os_str().to_os_string(),
-            ],
-            vec![
-                winpmem.clone().into_os_string(),
-                "-o".into(),
-                output_file.as_ref().as_os_str().to_os_string(),
-                "-1".into(),
             ],
         ];
 

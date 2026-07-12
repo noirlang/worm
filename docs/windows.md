@@ -52,8 +52,7 @@ Administrator yetkisi gerektirir.
 **WinPMEM Komut Varyantları (sırasıyla denenir):**
 ```
 1. winpmem.exe acquire <output_file>
-2. winpmem.exe acquire --output <output_file>
-3. winpmem.exe -o <output_file> -1
+2. winpmem.exe acquire --format raw <output_file>
 ```
 
 ### Uzak İmaj Alma (amele-win Ajanı)
@@ -161,8 +160,7 @@ Requires Administrator privileges.
 **WinPMEM command variants (tried in order):**
 ```
 1. winpmem.exe acquire <output_file>
-2. winpmem.exe acquire --output <output_file>
-3. winpmem.exe -o <output_file> -1
+2. winpmem.exe acquire --format raw <output_file>
 ```
 
 ### Remote Imaging (amele-win Agent)
