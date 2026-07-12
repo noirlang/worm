@@ -186,18 +186,25 @@ fn run_local_ram_job(
                 request.case_name.as_deref().unwrap_or_default(),
                 None,
             ) {
-                Ok(finalized) => finish_acquisition_job_with_message(
-                    &job_id,
-                    json!({
-                        "message": "RAM edinimi tamamlandi",
-                        "target_path": finalized.target_path,
-                        "bytes_written": result.bytes_written,
-                        "sha256": finalized.sha256,
-                        "raw_sha256": finalized.raw_sha256,
-                        "output_format": finalized.format.as_str(),
-                    }),
-                    "RAM edinimi tamamlandi",
-                ),
+                Ok(finalized) => {
+                    let completion_message = if format == AcquisitionOutputFormat::Aff4 {
+                        "RAM AFF4 paketi tamamlandi"
+                    } else {
+                        "RAM edinimi tamamlandi"
+                    };
+                    finish_acquisition_job_with_message(
+                        &job_id,
+                        json!({
+                            "message": completion_message,
+                            "target_path": finalized.target_path,
+                            "bytes_written": result.bytes_written,
+                            "sha256": finalized.sha256,
+                            "raw_sha256": finalized.raw_sha256,
+                            "output_format": finalized.format.as_str(),
+                        }),
+                        completion_message,
+                    )
+                }
                 Err(err) => {
                     fail_acquisition_job_with_message(&job_id, err, "RAM formati tamamlanamadi")
                 }
@@ -288,20 +295,29 @@ fn run_remote_ram_job(job_id: String, request: RemoteRamRequest) {
                                 request.case_name.as_deref().unwrap_or_default(),
                                 remote_sha256,
                             ) {
-                                Ok(finalized) => finish_acquisition_job_with_message(
-                                    &job_id,
-                                    json!({
-                                        "message": download.message,
-                                        "remote_job_id": ram_result.job_id,
-                                        "target_path": finalized.target_path,
-                                        "bytes_transferred": download.bytes_transferred,
-                                        "remote_bytes": ram_result.total_size,
-                                        "sha256": finalized.sha256,
-                                        "raw_sha256": finalized.raw_sha256,
-                                        "output_format": finalized.format.as_str(),
-                                    }),
-                                    "RAM edinimi tamamlandi",
-                                ),
+                                Ok(finalized) => {
+                                    let completion_message =
+                                        if format == AcquisitionOutputFormat::Aff4 {
+                                            "Uzak RAM AFF4 paketi tamamlandi"
+                                        } else {
+                                            "Uzak RAM edinimi tamamlandi"
+                                        };
+                                    finish_acquisition_job_with_message(
+                                        &job_id,
+                                        json!({
+                                            "message": completion_message,
+                                            "agent_message": download.message,
+                                            "remote_job_id": ram_result.job_id,
+                                            "target_path": finalized.target_path,
+                                            "bytes_transferred": download.bytes_transferred,
+                                            "remote_bytes": ram_result.total_size,
+                                            "sha256": finalized.sha256,
+                                            "raw_sha256": finalized.raw_sha256,
+                                            "output_format": finalized.format.as_str(),
+                                        }),
+                                        completion_message,
+                                    )
+                                }
                                 Err(err) => fail_acquisition_job_with_message(
                                     &job_id,
                                     err,

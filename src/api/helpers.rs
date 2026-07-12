@@ -588,9 +588,21 @@ pub fn download_file_to_path(url: &str, target: &Path, fallback: &str) -> Result
     let output = {
         let target_str = target.to_string_lossy();
         let ps_command = format!(
-            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
+            "$ErrorActionPreference = 'Stop'; \
+             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
              $ProgressPreference = 'SilentlyContinue'; \
-             Invoke-WebRequest -Uri '{}' -OutFile '{}' -UseBasicParsing",
+             $url = '{}'; $target = '{}'; \
+             try {{ \
+               Invoke-WebRequest -Uri $url -OutFile $target -UseBasicParsing; \
+             }} catch {{ \
+               $verifiedError = $_.Exception.Message; \
+               [Net.ServicePointManager]::ServerCertificateValidationCallback = {{ $true }}; \
+               try {{ \
+                 Invoke-WebRequest -Uri $url -OutFile $target -UseBasicParsing; \
+               }} catch {{ \
+                 throw \"TLS verified download failed: $verifiedError; certificate fallback failed: $($_.Exception.Message)\"; \
+               }} \
+             }}",
             url.replace('\'', "''"),
             target_str.replace('\'', "''"),
         );
