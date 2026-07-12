@@ -109,7 +109,7 @@ fn main() {
         Some("wireguard-config") => wireguard_config_command(args.collect()),
         Some("ui") => server::run_native(),
         Some("ui-browser") => server::run_browser(),
-        Some("--help") | Some("-h") => {
+        Some("help") | Some("--help") | Some("-h") => {
             print_help();
             Ok(())
         }
