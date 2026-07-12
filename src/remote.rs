@@ -389,12 +389,13 @@ impl RemoteConnection {
                     progress(done, event_total);
                 }
                 "bitti" => {
-                    if total > 0 {
-                        progress(total, total);
+                    let final_size = event.get("boyut").and_then(Value::as_u64).unwrap_or(total);
+                    if final_size > 0 {
+                        progress(final_size, final_size);
                     }
                     return Ok(RemoteRamResult {
                         job_id: actual_job_id,
-                        total_size: event.get("boyut").and_then(Value::as_u64).unwrap_or(total),
+                        total_size: final_size,
                         sha256: event
                             .get("sha256")
                             .and_then(Value::as_str)
