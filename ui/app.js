@@ -16,7 +16,7 @@ import { otherPage, detailPanel, settingsPage, aboutPage, hashPanel } from "./pa
 import { workflowPage, pickerField, field, pageTitle, casePanel } from "./pages/workflow.js";
 import { initDeveloperMode, devLog } from "./developer.js";
 
-const APP_VERSION = "v0.0.13";
+const APP_VERSION = "v0.0.14";
 const assetPath = "./assets";
 const backendAvailable = location.protocol === "http:" || location.protocol === "https:";
 const urlParams = new URLSearchParams(window.location.search);

@@ -42,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "amele"
-version = "0.0.13"
+version = "0.0.14"
 dependencies = [
  "base64",
  "chrono",
