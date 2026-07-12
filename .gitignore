@@ -8,3 +8,5 @@
 agent.md
 __pycache__/
 *.pyc
+/test-qemu
+
