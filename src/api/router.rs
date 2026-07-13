@@ -479,6 +479,14 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
             );
             update::update_check_endpoint()
         }
+        ("GET", "/api/update-target") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:system",
+                "Lokal guncelleme paket tipi algilaniyor",
+            );
+            update::update_target_endpoint()
+        }
         ("POST", "/api/update-download") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Info,

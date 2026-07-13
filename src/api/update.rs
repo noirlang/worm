@@ -129,6 +129,12 @@ pub fn update_check_endpoint() -> Response {
     }))
 }
 
+/// Ag baglantisi gerektirmeden mevcut sistemde hangi paket tipinin kullanildigini doner.
+pub fn update_target_endpoint() -> Response {
+    let update_target = current_update_target();
+    json_ok(update_target_json(&update_target, None))
+}
+
 /// Seçilen release asset'ini indirir ve hash doğrulaması yapar.
 pub fn update_download_endpoint(body: &[u8]) -> Response {
     #[derive(Deserialize)]
@@ -246,7 +252,17 @@ pub fn update_install_endpoint(body: &[u8]) -> Response {
 
 fn preferred_update_asset(assets: &[Value], target: &UpdateTarget) -> Value {
     let mut asset = preferred_update_asset_for_kind(assets, target.kind)
-        .or_else(|| preferred_update_asset_fallback(assets))
+        .or_else(|| {
+            if matches!(
+                target.kind,
+                UpdatePackageKind::AppImage | UpdatePackageKind::Tarball
+            ) || target.detected_by == "fallback"
+            {
+                preferred_update_asset_fallback(assets)
+            } else {
+                None
+            }
+        })
         .unwrap_or(Value::Null);
 
     if let Some(object) = asset.as_object_mut() {
@@ -369,6 +385,10 @@ fn detect_linux_update_target() -> UpdateTarget {
         };
     }
 
+    if let Some(target) = detect_linux_kind_from_current_exe() {
+        return target;
+    }
+
     if package_query_succeeds("pacman", &["-Q"]) {
         return UpdateTarget {
             kind: UpdatePackageKind::Pacman,
@@ -422,6 +442,42 @@ fn detect_linux_update_target() -> UpdateTarget {
         kind: UpdatePackageKind::AppImage,
         detected_by: "fallback",
     }
+}
+
+#[cfg(target_os = "linux")]
+fn detect_linux_kind_from_current_exe() -> Option<UpdateTarget> {
+    let exe = std::env::current_exe().ok()?;
+    if package_file_query_succeeds("pacman", &["-Qo"], &exe) {
+        return Some(UpdateTarget {
+            kind: UpdatePackageKind::Pacman,
+            detected_by: "pacman-owner",
+        });
+    }
+    if package_file_query_succeeds("dpkg-query", &["-S"], &exe) {
+        return Some(UpdateTarget {
+            kind: UpdatePackageKind::Deb,
+            detected_by: "dpkg-owner",
+        });
+    }
+    if package_file_query_succeeds("rpm", &["-qf"], &exe) {
+        return Some(UpdateTarget {
+            kind: UpdatePackageKind::Rpm,
+            detected_by: "rpm-owner",
+        });
+    }
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn package_file_query_succeeds(program: &str, args: &[&str], path: &Path) -> bool {
+    Command::new(program)
+        .args(args)
+        .arg(path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 #[cfg(target_os = "linux")]
@@ -489,8 +545,8 @@ fn update_install_preview(kind: UpdatePackageKind, asset_name: Option<&str>) -> 
         UpdatePackageKind::AppImage => {
             format!("chmod +x {} && {}", shell_quote(name), shell_quote(name))
         }
-        UpdatePackageKind::Deb => format!("sudo apt install -y {}", shell_quote(name)),
-        UpdatePackageKind::Rpm => format!("sudo dnf install -y {}", shell_quote(name)),
+        UpdatePackageKind::Deb => format!("sudo apt install {}", shell_quote(name)),
+        UpdatePackageKind::Rpm => format!("sudo dnf install {}", shell_quote(name)),
         UpdatePackageKind::Pacman => format!("sudo pacman -U {}", shell_quote(name)),
         UpdatePackageKind::Tarball => format!("tar -xzf {}", shell_quote(name)),
     }
@@ -518,10 +574,7 @@ fn linux_package_install_command(
     let (program, args) = match kind {
         UpdatePackageKind::Deb => {
             if command_exists("apt") {
-                (
-                    "apt".to_string(),
-                    vec!["install".to_string(), "-y".to_string(), path],
-                )
+                ("apt".to_string(), vec!["install".to_string(), path])
             } else if command_exists("dpkg") {
                 ("dpkg".to_string(), vec!["-i".to_string(), path])
             } else {
@@ -530,20 +583,11 @@ fn linux_package_install_command(
         }
         UpdatePackageKind::Rpm => {
             if command_exists("dnf") {
-                (
-                    "dnf".to_string(),
-                    vec!["install".to_string(), "-y".to_string(), path],
-                )
+                ("dnf".to_string(), vec!["install".to_string(), path])
             } else if command_exists("yum") {
-                (
-                    "yum".to_string(),
-                    vec!["localinstall".to_string(), "-y".to_string(), path],
-                )
+                ("yum".to_string(), vec!["localinstall".to_string(), path])
             } else if command_exists("zypper") {
-                (
-                    "zypper".to_string(),
-                    vec!["--non-interactive".to_string(), "install".to_string(), path],
-                )
+                ("zypper".to_string(), vec!["install".to_string(), path])
             } else if command_exists("rpm") {
                 ("rpm".to_string(), vec!["-Uvh".to_string(), path])
             } else {
@@ -580,18 +624,18 @@ fn elevate_command(program: String, args: Vec<String>) -> Result<(String, Vec<St
         return Ok((program, args));
     }
 
-    if command_exists("pkexec") {
-        let mut elevated_args = Vec::with_capacity(args.len() + 1);
-        elevated_args.push(program);
-        elevated_args.extend(args);
-        return Ok(("pkexec".to_string(), elevated_args));
-    }
-
     if command_exists("sudo") {
         let mut elevated_args = Vec::with_capacity(args.len() + 1);
         elevated_args.push(program);
         elevated_args.extend(args);
         return Ok(("sudo".to_string(), elevated_args));
+    }
+
+    if command_exists("pkexec") {
+        let mut elevated_args = Vec::with_capacity(args.len() + 1);
+        elevated_args.push(program);
+        elevated_args.extend(args);
+        return Ok(("pkexec".to_string(), elevated_args));
     }
 
     Err("Yetki yükseltme aracı bulunamadı. pkexec veya sudo kurulu olmalı.".to_string())
@@ -652,11 +696,20 @@ fn launch_update_installer(path: &Path) -> Result<String, String> {
         }
 
         let (program, args, preview) = linux_package_install_command(package_kind, path)?;
-        Command::new(&program)
-            .args(&args)
+        let _ = (program, args);
+        let log_path = update_install_log_path(path);
+        let script = linux_update_console_script(&preview, &log_path);
+        let (terminal, terminal_args) = terminal_command_for_script(&script).ok_or_else(|| {
+            format!("Kurulum terminali bulunamadı. Şu komutu terminalde elle çalıştırın: {preview}")
+        })?;
+        Command::new(&terminal)
+            .args(&terminal_args)
             .spawn()
-            .map_err(|err| format!("installer could not be started: {err}"))?;
-        Ok(format!("Kurulum başlatıldı: {preview}"))
+            .map_err(|err| format!("installer console could not be started: {err}"))?;
+        Ok(format!(
+            "Kurulum konsolu açıldı: {preview}\nLog: {}",
+            log_path.display()
+        ))
     }
 
     #[cfg(not(any(unix, windows)))]
@@ -664,6 +717,62 @@ fn launch_update_installer(path: &Path) -> Result<String, String> {
         let _ = package_kind;
         Err("automatic update install is not supported on this platform".to_string())
     }
+}
+
+#[cfg(unix)]
+fn update_install_log_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("amele-update");
+    path.with_file_name(format!("{file_name}.install.log"))
+}
+
+#[cfg(unix)]
+fn linux_update_console_script(command_line: &str, log_path: &Path) -> String {
+    let log = shell_quote(&log_path.to_string_lossy());
+    format!(
+        "set -o pipefail\n\
+         clear\n\
+         echo 'Amele güncelleme kurulumu'\n\
+         echo 'Komut: {command_line}'\n\
+         echo 'Log: {log}'\n\
+         echo\n\
+         ({command_line}) 2>&1 | tee -a {log}\n\
+         status=${{PIPESTATUS[0]}}\n\
+         echo\n\
+         echo \"Çıkış kodu: $status\" | tee -a {log}\n\
+         if [ \"$status\" -eq 0 ]; then echo 'Kurulum tamamlandı.' | tee -a {log}; else echo 'Kurulum başarısız oldu.' | tee -a {log}; fi\n\
+         echo\n\
+         read -r -p 'Kapatmak için Enter...' _\n\
+         exit \"$status\""
+    )
+}
+
+#[cfg(unix)]
+fn terminal_command_for_script(script: &str) -> Option<(String, Vec<String>)> {
+    let candidates = [
+        "x-terminal-emulator",
+        "kgx",
+        "gnome-terminal",
+        "konsole",
+        "alacritty",
+        "kitty",
+        "xterm",
+    ];
+    candidates.iter().find_map(|terminal| {
+        if !command_exists(terminal) {
+            return None;
+        }
+        let args = match *terminal {
+            "kgx" | "gnome-terminal" => vec!["--", "bash", "-lc", script],
+            _ => vec!["-e", "bash", "-lc", script],
+        };
+        Some((
+            (*terminal).to_string(),
+            args.into_iter().map(str::to_string).collect(),
+        ))
+    })
 }
 
 fn sanitize_download_name(value: &str) -> String {
@@ -746,6 +855,35 @@ mod tests {
     }
 
     #[test]
+    fn update_asset_selection_does_not_fallback_for_detected_linux_package() {
+        let assets = vec![
+            json!({"name": "amele-linux-x64.AppImage", "download_url": "appimage"}),
+            json!({"name": "amele-linux-x64.deb", "download_url": "deb"}),
+        ];
+
+        let arch = preferred_update_asset(
+            &assets,
+            &UpdateTarget {
+                kind: UpdatePackageKind::Pacman,
+                detected_by: "pacman-owner",
+            },
+        );
+        assert!(arch.is_null());
+
+        let fallback = preferred_update_asset(
+            &assets,
+            &UpdateTarget {
+                kind: UpdatePackageKind::AppImage,
+                detected_by: "fallback",
+            },
+        );
+        assert_eq!(
+            fallback.get("name").and_then(|value| value.as_str()),
+            Some("amele-linux-x64.AppImage")
+        );
+    }
+
+    #[test]
     fn update_install_preview_uses_package_manager_commands() {
         assert_eq!(
             update_install_preview(
@@ -756,11 +894,11 @@ mod tests {
         );
         assert_eq!(
             update_install_preview(UpdatePackageKind::Deb, Some("amele-linux-x64.deb")),
-            "sudo apt install -y amele-linux-x64.deb"
+            "sudo apt install amele-linux-x64.deb"
         );
         assert_eq!(
             update_install_preview(UpdatePackageKind::Rpm, Some("amele-linux-x64.rpm")),
-            "sudo dnf install -y amele-linux-x64.rpm"
+            "sudo dnf install amele-linux-x64.rpm"
         );
     }
 
