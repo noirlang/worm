@@ -58,7 +58,7 @@ impl UpdatePackageKind {
             Some(Self::Deb)
         } else if name.ends_with(".rpm") {
             Some(Self::Rpm)
-        } else if name.contains(".pkg.tar.") {
+        } else if name.contains(".pkg.tar.") || is_legacy_arch_asset_name(&name) {
             Some(Self::Pacman)
         } else if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
             Some(Self::Tarball)
@@ -66,6 +66,11 @@ impl UpdatePackageKind {
             None
         }
     }
+}
+
+fn is_legacy_arch_asset_name(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name == "amele-linux-x64.tar.zst" || name == "amele-forensic-tool-linux-x64.tar.zst"
 }
 
 /// GitHub release API üzerinden güncelleme bilgisi alır.
@@ -116,6 +121,11 @@ pub fn update_check_endpoint() -> Response {
         .unwrap_or_default();
     let update_target = current_update_target();
     let platform_asset = preferred_update_asset(&assets, &update_target);
+    let asset_error = if platform_asset.is_null() {
+        Some(missing_platform_asset_message(&update_target, &assets))
+    } else {
+        None
+    };
 
     json_ok(json!({
         "current_version": env!("CARGO_PKG_VERSION"),
@@ -126,6 +136,7 @@ pub fn update_check_endpoint() -> Response {
         "assets": assets,
         "update_target": update_target_json(&update_target, platform_asset.get("name").and_then(Value::as_str)),
         "platform_asset": platform_asset,
+        "asset_error": asset_error,
     }))
 }
 
@@ -359,6 +370,33 @@ fn update_target_json(target: &UpdateTarget, asset_name: Option<&str>) -> Value 
         "detected_by": target.detected_by,
         "install_command": update_install_preview(asset_kind, asset_name),
     })
+}
+
+fn missing_platform_asset_message(target: &UpdateTarget, assets: &[Value]) -> String {
+    let available = assets
+        .iter()
+        .filter_map(|asset| asset.get("name").and_then(Value::as_str))
+        .filter(|name| !name.is_empty())
+        .collect::<Vec<&str>>();
+    let expected = match target.kind {
+        UpdatePackageKind::WindowsMsi => ".msi",
+        UpdatePackageKind::AppImage => ".AppImage",
+        UpdatePackageKind::Deb => ".deb",
+        UpdatePackageKind::Rpm => ".rpm",
+        UpdatePackageKind::Pacman => ".pkg.tar.zst",
+        UpdatePackageKind::Tarball => ".tar.gz",
+    };
+    format!(
+        "{} paketi release içinde bulunamadı. Beklenen asset: {}. Algılama: {}. Release assetleri: {}",
+        target.kind.label(),
+        expected,
+        target.detected_by,
+        if available.is_empty() {
+            "(asset yok)".to_string()
+        } else {
+            available.join(", ")
+        }
+    )
 }
 
 #[cfg(target_os = "linux")]
@@ -851,6 +889,34 @@ mod tests {
         assert_eq!(
             rpm.get("name").and_then(|value| value.as_str()),
             Some("amele-linux-x64.rpm")
+        );
+    }
+
+    #[test]
+    fn update_asset_selection_accepts_legacy_arch_tar_zst_name() {
+        let assets = vec![
+            json!({"name": "amele-linux-x64.AppImage", "download_url": "appimage"}),
+            json!({"name": "amele-linux-x64.tar.zst", "download_url": "arch"}),
+        ];
+
+        let arch = preferred_update_asset(
+            &assets,
+            &UpdateTarget {
+                kind: UpdatePackageKind::Pacman,
+                detected_by: "pacman-owner",
+            },
+        );
+        assert_eq!(
+            arch.get("name").and_then(|value| value.as_str()),
+            Some("amele-linux-x64.tar.zst")
+        );
+        assert_eq!(
+            arch.get("package_kind").and_then(|value| value.as_str()),
+            Some("pacman")
+        );
+        assert_eq!(
+            UpdatePackageKind::from_asset_name("generic-linux-x64.tar.zst"),
+            None
         );
     }
 

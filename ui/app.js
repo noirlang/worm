@@ -1797,7 +1797,10 @@ async function handleAction(button) {
       render();
       const asset = result.platform_asset || {};
       const target = result.update_target || {};
-      const assetLine = asset.name ? `<br />Asset: ${escapeHtml(asset.name)} (${formatBytes(asset.size)})` : `<br />${t("settings.noAsset")}`;
+      const missingAsset = result.asset_error || t("settings.noAssetForPackage", {
+        package: target.asset_package_label || target.package_label || "-"
+      });
+      const assetLine = asset.name ? `<br />Asset: ${escapeHtml(asset.name)} (${formatBytes(asset.size)})` : `<br />${escapeHtml(missingAsset)}`;
       const packageLine = target.asset_package_label || target.package_label
         ? `<br />${t("settings.package")}: ${escapeHtml(target.asset_package_label || target.package_label)}`
         : "";
@@ -2833,7 +2836,13 @@ async function downloadUpdatePackage() {
   state.latestUpdate = update;
   const asset = update.platform_asset || {};
   if (!asset.download_url) {
-    showToast(t("settings.noAsset"), "error");
+    const target = update.update_target || state.updateTarget || {};
+    const message = update.asset_error || t("settings.noAssetForPackage", {
+      package: target.asset_package_label || target.package_label || "-"
+    });
+    if (status) status.innerHTML = `${icon("info")} ${escapeHtml(message)}`;
+    setStatus("[data-update-log]", escapeHtml(message));
+    showToast(message, "error");
     return;
   }
   if (progress) {
