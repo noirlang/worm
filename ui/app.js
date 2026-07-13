@@ -69,6 +69,7 @@ const state = {
   ramOsProfile: "windows",
   ramSymbolDirInput: "",
   latestUpdate: null,
+  updateTarget: null,
   android: {
     adbStatus: null,
     devices: [],
@@ -169,6 +170,22 @@ async function loadPersistedSettings() {
     );
   } catch (error) {
     devLog("WARN", "ui:settings", `Kalıcı ayarlar yüklenemedi: ${error.message}`, apiRequest, backendReady);
+  }
+}
+
+async function loadUpdateTarget() {
+  if (!backendReady()) return;
+  try {
+    state.updateTarget = await apiRequest("/api/update-target");
+    devLog(
+      "INFO",
+      "ui:update",
+      `Güncelleme paket tipi algılandı: ${state.updateTarget.package_label || state.updateTarget.package_kind || "-"}`,
+      apiRequest,
+      backendReady
+    );
+  } catch (error) {
+    devLog("WARN", "ui:update", `Güncelleme paket tipi algılanamadı: ${error.message}`, apiRequest, backendReady);
   }
 }
 
@@ -1776,6 +1793,8 @@ async function handleAction(button) {
       setStatus("[data-update-status]", `${icon("refresh")} ${t("settings.updateChecked")}`);
       const result = await apiRequest("/api/update-check");
       state.latestUpdate = result;
+      state.updateTarget = result.update_target || state.updateTarget;
+      render();
       const asset = result.platform_asset || {};
       const target = result.update_target || {};
       const assetLine = asset.name ? `<br />Asset: ${escapeHtml(asset.name)} (${formatBytes(asset.size)})` : `<br />${t("settings.noAsset")}`;
@@ -3145,6 +3164,7 @@ async function bootApp() {
   installUiErrorHandlers();
   hydrateIcons();
   await loadProfiles();
+  await loadUpdateTarget();
   if (state.activeProfile) {
     await loadPersistedSettings();
     await loadEvidenceCases();
