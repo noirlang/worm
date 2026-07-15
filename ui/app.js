@@ -33,6 +33,7 @@ const profileGate = document.querySelector("#profile-gate");
 const preferredLanguage = localStorage.getItem("amele-language") || "en";
 const requestedTheme = urlParams.get("theme");
 const preferredTheme = ["dark", "light"].includes(requestedTheme || "") ? requestedTheme : localStorage.getItem("amele-theme") || "dark";
+const preferredSidebarCollapsed = localStorage.getItem("amele-sidebar-collapsed") === "1";
 
 function initialLogMessages(language) {
   return [translate(language, backendAvailable ? "log.appReady" : "log.previewMode")];
@@ -43,6 +44,7 @@ const state = {
   isDevConsole,
   theme: preferredTheme,
   language: preferredLanguage,
+  sidebarCollapsed: preferredSidebarCollapsed,
   platform: detectPlatform(),
   files: {},
   activeTab: "hash",
@@ -148,6 +150,20 @@ function syncBrandLogo() {
   const brandImg = document.querySelector("#brand-logo-img");
   if (!brandImg) return;
   brandImg.src = state.theme === "light" ? "./assets/logo/logo-siyah.png" : "./assets/logo/logo.png";
+}
+
+function syncSidebarState() {
+  app.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
+  document.querySelectorAll("[data-sidebar-toggle]").forEach((button) => {
+    button.setAttribute("aria-expanded", String(!state.sidebarCollapsed));
+    button.setAttribute("aria-label", state.sidebarCollapsed ? "Menüyü genişlet" : "Menüyü daralt");
+  });
+}
+
+function setSidebarCollapsed(collapsed) {
+  state.sidebarCollapsed = Boolean(collapsed);
+  localStorage.setItem("amele-sidebar-collapsed", state.sidebarCollapsed ? "1" : "0");
+  syncSidebarState();
 }
 
 function applyPersistedSettings(settings) {
@@ -882,6 +898,13 @@ document.addEventListener("click", (event) => {
   if (externalLink && isExternalUrl(externalLink.href)) {
     event.preventDefault();
     openExternalUrl(externalLink.href);
+    return;
+  }
+
+  const sidebarToggle = event.target.closest("[data-sidebar-toggle]");
+  if (sidebarToggle) {
+    event.preventDefault();
+    setSidebarCollapsed(sidebarToggle.dataset.sidebarToggle === "collapse");
     return;
   }
 
@@ -3170,6 +3193,7 @@ async function previewCarvedFile(filePath) {
 async function bootApp() {
   setLanguage(state.language);
   setTheme(state.theme);
+  syncSidebarState();
   installUiErrorHandlers();
   hydrateIcons();
   await loadProfiles();
