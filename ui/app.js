@@ -34,6 +34,7 @@ const preferredLanguage = localStorage.getItem("amele-language") || "en";
 const requestedTheme = urlParams.get("theme");
 const preferredTheme = ["dark", "light"].includes(requestedTheme || "") ? requestedTheme : localStorage.getItem("amele-theme") || "dark";
 const preferredSidebarCollapsed = localStorage.getItem("amele-sidebar-collapsed") === "1";
+if (preferredSidebarCollapsed) app.classList.add("sidebar-collapsed");
 
 function initialLogMessages(language) {
   return [translate(language, backendAvailable ? "log.appReady" : "log.previewMode")];

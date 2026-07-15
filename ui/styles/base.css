@@ -223,7 +223,7 @@ button {
 }
 
 .shell.sidebar-collapsed {
-  grid-template-columns: 86px 1fr;
+  grid-template-columns: 84px 1fr;
 }
 
 .shell.theme-light {
@@ -260,7 +260,8 @@ button {
 }
 
 .sidebar-collapsed .sidebar {
-  padding: 22px 14px;
+  align-items: center;
+  padding: 22px 12px;
 }
 
 .theme-light .sidebar {
@@ -323,7 +324,9 @@ button {
 .sidebar-collapsed .brand-row {
   flex-direction: column;
   justify-content: center;
+  align-items: center;
   gap: 10px;
+  width: 100%;
 }
 
 .brand-mark {
@@ -429,8 +432,10 @@ button {
 }
 
 .sidebar-collapsed .side-nav {
+  justify-items: center;
   gap: 12px;
   margin-top: 44px;
+  width: 100%;
 }
 
 .nav-item {
@@ -468,11 +473,12 @@ button {
 .sidebar-collapsed .nav-item {
   grid-template-columns: 1fr;
   justify-items: center;
-  width: 56px;
-  min-height: 54px;
+  width: 52px;
+  min-height: 52px;
   padding: 0;
   gap: 0;
   margin-inline: auto;
+  border-radius: 16px;
   text-align: center;
 }
 
@@ -540,7 +546,7 @@ button {
 }
 
 .sidebar-collapsed .nav-item::before {
-  left: -7px;
+  left: 0;
   top: 15px;
   bottom: 15px;
 }
@@ -579,6 +585,7 @@ button {
 .sidebar-collapsed .sidebar-footer {
   justify-items: center;
   padding: 18px 0 4px;
+  width: 100%;
 }
 
 .sidebar-collapsed .sidebar-footer .version {
@@ -1879,11 +1886,14 @@ svg.svg-fill path {
   }
 
   .sidebar-collapsed .sidebar {
+    align-items: stretch;
     padding: 12px;
   }
 
   .sidebar-collapsed .brand-row {
+    flex-direction: row;
     justify-content: space-between;
+    width: auto;
   }
 
   .sidebar-collapsed .sidebar-collapse-toggle {
