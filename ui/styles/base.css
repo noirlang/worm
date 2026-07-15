@@ -321,7 +321,9 @@ button {
 }
 
 .sidebar-collapsed .brand-row {
+  flex-direction: column;
   justify-content: center;
+  gap: 10px;
 }
 
 .brand-mark {
@@ -580,7 +582,6 @@ button {
 }
 
 .sidebar-collapsed .sidebar-footer .version {
-  order: 1;
   max-width: 54px;
   font-size: 10px;
   opacity: 0.72;
@@ -588,10 +589,6 @@ button {
   overflow: hidden;
   text-overflow: clip;
   white-space: nowrap;
-}
-
-.sidebar-collapsed .sidebar-expand-toggle {
-  order: 2;
 }
 
 .mini-status {
