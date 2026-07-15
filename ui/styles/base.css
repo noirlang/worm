@@ -459,7 +459,9 @@ button {
   display: inline-grid;
   place-items: center;
   width: 28px;
+  height: 28px;
   min-width: 28px;
+  line-height: 0;
 }
 
 .nav-item span[data-i18n] {
@@ -471,9 +473,11 @@ button {
 }
 
 .sidebar-collapsed .nav-item {
+  display: grid;
   grid-template-columns: 1fr;
-  justify-items: center;
+  place-items: center;
   width: 52px;
+  height: 52px;
   min-height: 52px;
   padding: 0;
   gap: 0;
@@ -482,7 +486,16 @@ button {
   text-align: center;
 }
 
+.sidebar-collapsed .nav-item span[data-icon] {
+  grid-area: 1 / 1;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  margin: 0;
+}
+
 .sidebar-collapsed .nav-item span[data-i18n] {
+  display: none;
   max-width: 0;
   opacity: 0;
   pointer-events: none;
@@ -1924,8 +1937,17 @@ svg.svg-fill path {
 
   .sidebar-collapsed .nav-item {
     width: auto;
+    height: auto;
     min-height: 48px;
     padding: 10px;
+  }
+
+  .sidebar-collapsed .nav-item span[data-i18n] {
+    display: inline;
+    max-width: none;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
   }
 
   .sidebar-footer {
