@@ -614,7 +614,7 @@ function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
             <span>${profile?.language === "en" ? "English" : "Türkçe"}</span>
           </div>
           <div class="settings-row">
-            <strong>${t("settings.darkTheme")}</strong>
+            <strong>${t("profile.theme")}</strong>
             <span>${profile?.theme === "light" ? t("profile.themeLight") : t("profile.themeDark")}</span>
           </div>
           <div class="settings-row">
