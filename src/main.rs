@@ -9,6 +9,7 @@ use amele::disk;
 use amele::disk_analysis;
 use amele::evidence::EvidenceVault;
 use amele::hash::{self, HashAlgorithm};
+use amele::ios;
 use amele::output_format::{self, AcquisitionOutputFormat};
 use amele::ram;
 use amele::ram_analysis;
@@ -94,6 +95,8 @@ fn main() {
         Some("android-remote-connect") => android_remote_connect_command(args.collect()),
         Some("android-remote-disconnect") => android_remote_disconnect_command(args.collect()),
         Some("android-case-analysis") => android_case_analysis_command(args.collect()),
+        Some("ios-backup-profile") => ios_backup_profile_command(args.collect()),
+        Some("ios-backup-normalize") => ios_backup_normalize_command(args.collect()),
         Some("disk-list-helper") => disk_list_helper_command(args.collect()),
         Some("image-helper") => image_helper_command(args.collect()),
         Some("ram-helper") => ram_helper_command(args.collect()),
@@ -267,6 +270,8 @@ fn print_help() {
                android-remote-connect <host> [port] [tcp|mesh] [label]\n\
                android-remote-disconnect <serial>       Disconnect remote Android ADB connection\n\
                android-case-analysis <case>             Android case output analysis summary\n\
+               ios-backup-profile <backup_dir>          Read iOS backup metadata\n\
+               ios-backup-normalize <backup_dir> <case> Normalize iOS backup into case ios folder\n\
                image-analyze <image> [mount_dir]       Disk image analysis summary\n\
                ram-summary <ram> <windows|linux> [symbols]\n\
                ram-strings <ram>                       RAM IOC/string scan\n\
@@ -317,6 +322,8 @@ fn print_help() {
                android-remote-connect <host> [port] [tcp|mesh] [etiket]\n\
                android-remote-disconnect <serial>       Uzak Android ADB baglantisini kes\n\
                android-case-analysis <vaka>             Android vaka cikti analiz ozeti\n\
+               ios-backup-profile <backup_klasoru>      iOS backup metadata bilgisini yazdir\n\
+               ios-backup-normalize <backup_klasoru> <vaka> iOS backup'i vaka ios klasorune normalize et\n\
                image-analyze <imaj> [mount_klasoru]    Disk imaj analiz ozeti\n\
                ram-summary <ram> <windows|linux> [symbols]\n\
                ram-strings <ram>                       RAM IOC/dizgi taramasi\n\
@@ -816,6 +823,47 @@ fn android_case_analysis_command(args: Vec<String>) -> Result<(), String> {
     let vault = cli_case_vault(&args[0])?;
     let report = android_analysis::analyze_android_case(&vault.case_name, &vault.android_dir);
     print_json(&report)
+}
+
+/// iOS backup profil bilgisini JSON olarak yazar.
+fn ios_backup_profile_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanim: ios-backup-profile <backup_klasoru>".to_string());
+    }
+    let info = ios::inspect_backup(&args[0]).map_err(|err| crate_diagnostic(err.to_string()))?;
+    print_json(&info)
+}
+
+/// iOS backup klasörünü vaka ios klasörüne Backup2FS düzeninde normalize eder.
+fn ios_backup_normalize_command(args: Vec<String>) -> Result<(), String> {
+    if args.len() < 2 {
+        return Err("Kullanim: ios-backup-normalize <backup_klasoru> <vaka>".to_string());
+    }
+    let backup_path = PathBuf::from(&args[0]);
+    let vault = cli_case_vault(&args[1])?;
+    let backup_name = backup_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(cli_safe_stem)
+        .unwrap_or_else(|| "ios_backup".to_string());
+    let output_dir = vault
+        .ios_dir
+        .join(format!("{}_{}", backup_name, cli_timestamp()));
+    let result = ios::normalize_backup(
+        &backup_path,
+        &output_dir,
+        &[
+            HashAlgorithm::Md5,
+            HashAlgorithm::Sha1,
+            HashAlgorithm::Sha256,
+        ],
+        |done, total, step| print_step_progress("ios-backup", done as u32, total as u32, step),
+        |line| eprintln!("ios-backup: {line}"),
+        || false,
+        || false,
+    )
+    .map_err(|err| crate_diagnostic(err.to_string()))?;
+    print_json(&result)
 }
 
 /// Yetkili helper sürecinde diskleri listeleyip sonucu dosyaya yazar.

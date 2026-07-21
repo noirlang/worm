@@ -1,4 +1,5 @@
 import { androidModePage, androidPage, handleAndroidAction, syncAndroidDeviceSelection } from "./android.js";
+import { iosPage, handleIosAction, syncIosBackupPathInput } from "./ios.js";
 import { createApiRequest } from "./core/api.js";
 import { errorBoxHtml } from "./core/errors.js";
 import { detectPlatform, platformLabel as platformName } from "./core/platform.js";
@@ -77,6 +78,13 @@ const state = {
     adbStatus: null,
     devices: [],
     selectedDevice: ""
+  },
+  ios: {
+    backupPath: "",
+    profile: null,
+    hashAlgorithms: ["md5", "sha1", "sha256"],
+    normalizeJob: null,
+    normalizeLog: []
   },
   jobs: {},
   cachedDefaultCaseName: "",
@@ -454,6 +462,17 @@ function render() {
       casePanel: boundCasePanel,
       field
     });
+  } else if (state.route === "ios") {
+    view.innerHTML = iosPage({
+      t,
+      icon,
+      pageTitle,
+      state,
+      escapeHtml,
+      backendReady,
+      casePanel: boundCasePanel,
+      field
+    });
   } else {
     const pageCtx = {
       t,
@@ -492,11 +511,13 @@ function render() {
     if (workflow && workflow.mode.includes("disk")) loadEvidenceCases();
   }
   if (state.route === "android:logical" || state.route === "android:filesystem" || state.route === "android:ram") loadEvidenceCases();
+  if (state.route === "ios") loadEvidenceCases();
   view.focus({ preventScroll: true });
 }
 
 function routeGroup(route) {
   if (route.startsWith("android:")) return "android";
+  if (route === "ios") return "ios";
   if (!route.startsWith("workflow:")) return route;
   const workflowId = route.split(":")[1] || "";
   if (workflowId.startsWith("windows")) return "windows";
@@ -572,6 +593,7 @@ const routes = {
   windows: () => toolHub("windows"),
   linux: () => toolHub("linux"),
   android: () => androidPage({ t, icon, pageTitle, state, escapeHtml, backendReady }),
+  ios: () => "",
   agent: agentPage,
   analysis: analysisPage,
   profile: profilePage,
@@ -590,7 +612,8 @@ function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
           <span>${t("profile.caseCounts", {
             images: String(item.output_count || 0),
             ram: String(item.ram_count || 0),
-            android: String(item.android_count || 0)
+            android: String(item.android_count || 0),
+            ios: String(item.ios_count || 0)
           })}</span>
         </article>
       `).join("")
@@ -743,6 +766,7 @@ function caseOutputLabel(caseName, subdir = "ciktilar") {
     || (state.activeCase?.case_name === caseName ? state.activeCase : null);
   const keyBySubdir = {
     android: "android_dir",
+    ios: "ios_dir",
     ram: "ram_dir",
     ciktilar: "output_dir"
   };
@@ -750,6 +774,7 @@ function caseOutputLabel(caseName, subdir = "ciktilar") {
   if (caseName && caseName !== "__new__" && selected?.[key]) return selected[key];
   const folderBySubdir = {
     android: "android",
+    ios: "ios",
     ram: "ram",
     ciktilar: "ciktilar"
   };
@@ -1070,6 +1095,11 @@ document.addEventListener("change", async (event) => {
     syncAndroidDeviceSelection(androidDeviceSelect, { state, t, showToast });
   }
 
+  const iosBackupPath = event.target.closest("#ios-backup-path");
+  if (iosBackupPath) {
+    syncIosBackupPathInput(iosBackupPath, state);
+  }
+
   const ramOsSelect = event.target.closest("#ram-os-profile");
   if (ramOsSelect) {
     state.ramOsProfile = ramOsSelect.value || "windows";
@@ -1084,6 +1114,10 @@ document.addEventListener("change", async (event) => {
 document.addEventListener("input", (event) => {
   if (event.target.closest("#profile-full-name") || event.target.closest("#profile-username")) {
     captureProfileDraft();
+  }
+  const iosBackupPath = event.target.closest("#ios-backup-path");
+  if (iosBackupPath) {
+    syncIosBackupPathInput(iosBackupPath, state);
   }
 });
 
@@ -1134,6 +1168,21 @@ async function handleAction(button) {
 
   if (action?.startsWith("android-")) {
     const handled = await handleAndroidAction(button, {
+      apiRequest,
+      backendReady,
+      state,
+      t,
+      showToast,
+      render,
+      resolveCase() {
+        return resolveSelectedCaseName("#workflow-case") || null;
+      }
+    });
+    if (handled) return;
+  }
+
+  if (action?.startsWith("ios-")) {
+    const handled = await handleIosAction(button, {
       apiRequest,
       backendReady,
       state,
@@ -1954,7 +2003,10 @@ async function pickFolder(targetSelector) {
   if (backendReady()) {
     try {
       const result = await apiRequest("/api/pick-folder", { method: "POST" });
-      if (target) target.value = result.path;
+      if (target) {
+        target.value = result.path;
+        if (targetSelector === "#ios-backup-path") syncIosBackupPathInput(target, state);
+      }
       showToast(t("workflow.selectFolder", { path: result.path }));
       return result.path;
     } catch (error) {
@@ -1967,7 +2019,10 @@ async function pickFolder(targetSelector) {
   try {
     if (window.showDirectoryPicker) {
       const handle = await window.showDirectoryPicker();
-      if (target) target.value = handle.name;
+      if (target) {
+        target.value = handle.name;
+        if (targetSelector === "#ios-backup-path") syncIosBackupPathInput(target, state);
+      }
       showToast(t("workflow.selectFolder", { path: handle.name }));
       return handle;
     }
@@ -1986,7 +2041,10 @@ async function pickFolder(targetSelector) {
     input.addEventListener("change", () => {
       const first = input.files?.[0];
       const folder = first?.webkitRelativePath?.split("/")?.[0] || first?.name || "";
-      if (folder && target) target.value = folder;
+      if (folder && target) {
+        target.value = folder;
+        if (targetSelector === "#ios-backup-path") syncIosBackupPathInput(target, state);
+      }
       if (folder) showToast(t("workflow.selectFolder", { path: folder }));
       input.remove();
       resolve(folder);

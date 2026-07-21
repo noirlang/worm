@@ -58,6 +58,10 @@ test("Frontend Routing and Module Health", async (t) => {
     const { androidPage, androidModePage } = await import("../ui/android.js");
     assert.strictEqual(typeof androidPage, "function", "androidPage should be a function");
     assert.strictEqual(typeof androidModePage, "function", "androidModePage should be a function");
+
+    const { iosPage, handleIosAction } = await import("../ui/ios.js");
+    assert.strictEqual(typeof iosPage, "function", "iosPage should be a function");
+    assert.strictEqual(typeof handleIosAction, "function", "handleIosAction should be a function");
   });
 
   await t.test("icons module correctly hydrated and exports functions", async () => {
@@ -81,6 +85,7 @@ test("Frontend Routing and Module Health", async (t) => {
       "windows", 
       "linux", 
       "android", 
+      "ios",
       "agent", 
       "analysis", 
       "other", 

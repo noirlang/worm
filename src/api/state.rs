@@ -205,6 +205,7 @@ pub fn evidence_subdir(value: &str) -> &'static str {
         "disk_imajlari" | "ciktilar" | "outputs" | "images" => "ciktilar",
         "ram" => "ram",
         "android" => "android",
+        "ios" => "ios",
         _ => "ciktilar",
     }
 }

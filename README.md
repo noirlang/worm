@@ -4,7 +4,7 @@
 
 # Amele Forensic Tool
 
-*Collect digital evidence in one place. Disk, RAM, and Android acquisition.*
+*Collect digital evidence in one place. Disk, RAM, Android, and iOS backup acquisition.*
 
 [Website](https://amele.noirlang.tr) | [Releases](https://github.com/noirlang/amele/releases) | [Contributing](CONTRIBUTING.md) | [Security](SECURITY.md) | [Linux Agent](https://github.com/noirlang/amele-linux) | [Windows Agent](https://github.com/noirlang/amele-win)
 
@@ -14,7 +14,7 @@
 
 ## Overview
 
-Amele is a desktop forensic acquisition tool for authorized investigations. It brings disk imaging, memory acquisition, Android collection, hash verification, case output handling, image viewing, and reporting into one native application.
+Amele is a desktop forensic acquisition tool for authorized investigations. It brings disk imaging, memory acquisition, Android collection, iOS backup normalization, hash verification, case output handling, image viewing, and reporting into one native application.
 
 The app runs as a real desktop window on Linux and Windows.
 
@@ -25,7 +25,8 @@ The app runs as a real desktop window on Linux and Windows.
 - **Local memory acquisition:** capture RAM with AVML on Linux and WinPMEM on Windows.
 - **Remote memory acquisition:** start, pause, resume, stop, track, and download RAM dumps from agents.
 - **Android tools:** check ADB, list devices, collect logical data, collect filesystem data, capture volatile data, and analyze Android case outputs.
-- **Case management:** store acquisitions, notes, hashes, Android outputs, and reports under selected cases.
+- **iOS tools:** normalize unencrypted or already decrypted iTunes/Finder backups into a browsable Backup2FS-style file system, with per-file MD5/SHA1/SHA256 CSV logging.
+- **Case management:** store acquisitions, notes, hashes, Android outputs, iOS outputs, and reports under selected cases.
 - **Hashing and verification:** calculate MD5, SHA1, SHA256, and SHA512; generate sidecar hashes for acquired evidence.
 - **Image viewing:** mount supported images read-only for inspection.
 - **Reports:** create case reports from collected outputs and notes.
@@ -49,6 +50,13 @@ https://amele.noirlang.tr/amele-win.exe
 ```
 
 ## Build Requirements
+
+Module documentation:
+
+- [Windows forensic module](docs/windows.md)
+- [Linux forensic module](docs/linux.md)
+- [Android forensic module](docs/android.md)
+- [iOS forensic module](docs/ios.md)
 
 Install the Rust stable toolchain:
 
@@ -160,7 +168,7 @@ Commits without the `[build]` tag will be pushed to the `dev` branch but will no
 
 # Amele Adli Bilişim Aracı (Forensic Tool)
 
-*Dijital delilleri tek bir yerde toplayın. Disk, RAM ve Android edinimi.*
+*Dijital delilleri tek bir yerde toplayın. Disk, RAM, Android ve iOS backup edinimi.*
 
 [Web Sitesi](https://amele.noirlang.tr) | [Sürümler](https://github.com/noirlang/amele/releases) | [Katkıda Bulunma](CONTRIBUTING.md) | [Güvenlik](SECURITY.md) | [Linux Ajanı](https://github.com/noirlang/amele-linux) | [Windows Ajanı](https://github.com/noirlang/amele-win)
 
@@ -170,7 +178,7 @@ Commits without the `[build]` tag will be pushed to the `dev` branch but will no
 
 ## Genel Bakış
 
-Amele, yetkili incelemeler için geliştirilmiş bir masaüstü adli edinim aracıdır. Disk imajı alma, bellek (RAM) edinimi, Android veri toplama, hash doğrulama, vaka çıktısı yönetimi, imaj görüntüleme ve raporlama özelliklerini tek bir yerel uygulamada bir araya getirir.
+Amele, yetkili incelemeler için geliştirilmiş bir masaüstü adli edinim aracıdır. Disk imajı alma, bellek (RAM) edinimi, Android veri toplama, iOS backup normalizasyonu, hash doğrulama, vaka çıktısı yönetimi, imaj görüntüleme ve raporlama özelliklerini tek bir yerel uygulamada bir araya getirir.
 
 Uygulama Linux ve Windows üzerinde gerçek bir masaüstü penceresi olarak çalışır.
 
@@ -181,7 +189,8 @@ Uygulama Linux ve Windows üzerinde gerçek bir masaüstü penceresi olarak çal
 - **Yerel bellek (RAM) edinimi:** Linux üzerinde AVML ve Windows üzerinde WinPMEM ile RAM bellek kopyasını alın.
 - **Uzak bellek (RAM) edinimi:** Ajanlar üzerinden RAM edinimini başlatın, duraklatın, sürdürün, durdurun, izleyin ve RAM dökümlerini indirin.
 - **Android araçları:** ADB durumunu kontrol edin, cihazları listeleyin, mantıksal veri toplayın, dosya sistemi verisi toplayın, uçucu (volatile) verileri alın ve Android vaka çıktılarını analiz edin.
-- **Vaka yönetimi:** Edinimleri, notları, hash değerlerini, Android çıktılarını ve raporları seçilen vakalar altında saklayın.
+- **iOS araçları:** Şifresiz veya önceden decrypt edilmiş iTunes/Finder backup klasörlerini Backup2FS düzeninde gezilebilir dosya sistemine dönüştürün; her dosya için MD5/SHA1/SHA256 CSV log üretin.
+- **Vaka yönetimi:** Edinimleri, notları, hash değerlerini, Android/iOS çıktılarını ve raporları seçilen vakalar altında saklayın.
 - **Hash hesaplama ve doğrulama:** MD5, SHA1, SHA256 ve SHA512 hesaplayın; elde edilen deliller için yan dosya (sidecar) hash dosyaları oluşturun.
 - **İmaj görüntüleme:** Desteklenen imajları inceleme amacıyla salt okunur (read-only) olarak bağlayın (mount).
 - **Raporlar:** Toplanan çıktılardan ve notlardan vaka raporları oluşturun.
@@ -205,6 +214,13 @@ https://amele.noirlang.tr/amele-win.exe
 ```
 
 ## Derleme Gereksinimleri
+
+Modül dokümantasyonu:
+
+- [Windows adli bilişim modülü](docs/windows.md)
+- [Linux adli bilişim modülü](docs/linux.md)
+- [Android adli bilişim modülü](docs/android.md)
+- [iOS adli bilişim modülü](docs/ios.md)
 
 Stabil Rust araç zincirini (toolchain) kurun:
 

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-/// Vaka klasöründeki çıktı, Android, hash ve rapor sayılarını özetler.
+/// Vaka klasöründeki çıktı, mobil, hash ve rapor sayılarını özetler.
 pub struct EvidenceSummary {
     pub case_name: String,
     pub case_dir: PathBuf,
@@ -16,6 +16,7 @@ pub struct EvidenceSummary {
     pub created_by_name: Option<String>,
     pub output_count: usize,
     pub android_count: usize,
+    pub ios_count: usize,
     pub hash_count: usize,
     pub report_count: usize,
 }
@@ -28,6 +29,7 @@ pub struct EvidenceVault {
     pub outputs_dir: PathBuf,
     pub ram_dir: PathBuf,
     pub android_dir: PathBuf,
+    pub ios_dir: PathBuf,
     pub reports_dir: PathBuf,
     pub hash_dir: PathBuf,
     pub notes_dir: PathBuf,
@@ -49,6 +51,7 @@ impl EvidenceVault {
         let outputs_dir = case_dir.join("ciktilar");
         let ram_dir = case_dir.join("ram");
         let android_dir = case_dir.join("android");
+        let ios_dir = case_dir.join("ios");
         let reports_dir = case_dir.join("raporlar");
         let hash_dir = case_dir.join("hash");
         let notes_dir = case_dir.join("notlar");
@@ -59,6 +62,7 @@ impl EvidenceVault {
             &outputs_dir,
             &ram_dir,
             &android_dir,
+            &ios_dir,
             &reports_dir,
             &hash_dir,
             &notes_dir,
@@ -102,6 +106,7 @@ impl EvidenceVault {
             outputs_dir,
             ram_dir,
             android_dir,
+            ios_dir,
             reports_dir,
             hash_dir,
             notes_dir,
@@ -207,6 +212,7 @@ impl EvidenceVault {
             created_by_name: metadata.created_by_name,
             output_count: self.list_files("ciktilar")?.len(),
             android_count: self.list_files("android")?.len(),
+            ios_count: self.list_files("ios")?.len(),
             hash_count: self.list_files("hash")?.len(),
             report_count: self.list_files("raporlar")?.len(),
         })
@@ -219,6 +225,7 @@ impl EvidenceVault {
             "ciktilar" => &self.outputs_dir,
             "ram" => &self.ram_dir,
             "android" => &self.android_dir,
+            "ios" => &self.ios_dir,
             "raporlar" => &self.reports_dir,
             "hash" => &self.hash_dir,
             "notlar" => &self.notes_dir,
@@ -279,6 +286,7 @@ mod tests {
         assert!(vault.outputs_dir.is_dir());
         assert!(vault.ram_dir.is_dir());
         assert!(vault.android_dir.is_dir());
+        assert!(vault.ios_dir.is_dir());
         let note = vault.add_note("hello").unwrap();
         assert!(note.is_file());
         let summary = vault.summary().unwrap();

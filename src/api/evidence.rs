@@ -44,10 +44,12 @@ pub fn evidence_create_endpoint(body: &[u8]) -> Response {
                 "output_dir": vault.outputs_dir,
                 "ram_dir": vault.ram_dir,
                 "android_dir": vault.android_dir,
+                "ios_dir": vault.ios_dir,
                 "created_by": summary.created_by,
                 "created_by_name": summary.created_by_name,
                 "output_count": summary.output_count,
                 "android_count": summary.android_count,
+                "ios_count": summary.ios_count,
                 "hash_count": summary.hash_count,
                 "report_count": summary.report_count,
             }))
@@ -122,6 +124,7 @@ pub fn evidence_summary_endpoint() -> Response {
             "created_by_name": summary.created_by_name,
             "output_count": summary.output_count,
             "android_count": summary.android_count,
+            "ios_count": summary.ios_count,
             "hash_count": summary.hash_count,
             "report_count": summary.report_count,
         })),
@@ -176,6 +179,7 @@ pub fn evidence_cases_endpoint() -> Response {
                 "output_dir": case_dir.join("ciktilar"),
                 "ram_dir": case_dir.join("ram"),
                 "android_dir": case_dir.join("android"),
+                "ios_dir": case_dir.join("ios"),
             })
         });
 
@@ -260,12 +264,14 @@ fn case_listing_json(case_name: &str, case_dir: &Path) -> Value {
         "output_dir": case_dir.join("ciktilar"),
         "ram_dir": case_dir.join("ram"),
         "android_dir": case_dir.join("android"),
+        "ios_dir": case_dir.join("ios"),
         "created_by": metadata.created_by,
         "created_by_name": metadata.created_by_name,
         "created_at": metadata.created_at,
         "output_count": count_directory_entries(&case_dir.join("ciktilar")),
         "ram_count": count_directory_entries(&case_dir.join("ram")),
         "android_count": count_directory_entries(&case_dir.join("android")),
+        "ios_count": count_directory_entries(&case_dir.join("ios")),
         "hash_count": count_directory_entries(&case_dir.join("hash")),
         "report_count": count_directory_entries(&case_dir.join("raporlar")),
     })

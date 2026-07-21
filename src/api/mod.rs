@@ -6,6 +6,7 @@ pub mod developer;
 pub mod evidence;
 pub mod hash_api;
 mod helpers;
+pub mod ios;
 mod jobs;
 mod mount;
 pub mod profile;

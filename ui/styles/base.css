@@ -162,6 +162,20 @@
   height: 18px;
 }
 
+.ios-hash-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ios-hash-option {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input-bg);
+}
+
 .profile-case-list {
   display: grid;
   gap: 10px;

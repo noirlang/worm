@@ -175,15 +175,17 @@ fn render_txt(info: &ReportInfo, vault: Option<&EvidenceVault>) -> String {
 /// TXT rapora vaka kasası dosya özetini ekler.
 fn append_vault_summary_txt(out: &mut String, vault: &EvidenceVault) {
     let android_count = count_files_recursive(&vault.android_dir);
+    let ios_count = count_files_recursive(&vault.ios_dir);
     out.push_str("\n----------------------------------------\n");
     out.push_str("VAKA KASASI\n");
     out.push_str(&format!("Vaka: {}\n", vault.case_name));
     out.push_str(&format!("Klasor: {}\n", vault.case_dir.display()));
     out.push_str(&format!(
-        "Ciktilar: {} | RAM: {} | Android: {} | Hash: {} | Rapor: {}\n",
+        "Ciktilar: {} | RAM: {} | Android: {} | iOS: {} | Hash: {} | Rapor: {}\n",
         count_directory_entries(&vault.outputs_dir),
         count_directory_entries(&vault.ram_dir),
         android_count,
+        ios_count,
         count_directory_entries(&vault.hash_dir),
         count_directory_entries(&vault.reports_dir)
     ));
@@ -201,6 +203,20 @@ fn append_vault_summary_txt(out: &mut String, vault: &EvidenceVault) {
             out.push_str(&format!("... {} dosya daha\n", android_count - 10));
         }
     }
+    out.push_str("\niOS CIKTILARI\n");
+    out.push_str(&format!("Klasor: {}\n", vault.ios_dir.display()));
+    if ios_count == 0 {
+        out.push_str("Kayitli iOS ciktisi yok.\n");
+    } else {
+        for entry in collect_file_entries(&vault.ios_dir, 10) {
+            let name = entry["name"].as_str().unwrap_or_default();
+            let size = entry["size"].as_u64().unwrap_or_default();
+            out.push_str(&format!("- {name} ({size} bayt)\n"));
+        }
+        if ios_count > 10 {
+            out.push_str(&format!("... {} dosya daha\n", ios_count - 10));
+        }
+    }
 }
 
 /// Vaka kasasını JSON rapor içine eklenecek yapıya dönüştürür.
@@ -212,6 +228,7 @@ fn vault_report_json(vault: &EvidenceVault) -> Value {
             "outputs": &vault.outputs_dir,
             "ram": &vault.ram_dir,
             "android": &vault.android_dir,
+            "ios": &vault.ios_dir,
             "hash": &vault.hash_dir,
             "reports": &vault.reports_dir,
             "notes": &vault.notes_dir,
@@ -221,6 +238,7 @@ fn vault_report_json(vault: &EvidenceVault) -> Value {
             "outputs": count_directory_entries(&vault.outputs_dir),
             "ram": count_directory_entries(&vault.ram_dir),
             "android": count_files_recursive(&vault.android_dir),
+            "ios": count_files_recursive(&vault.ios_dir),
             "hash": count_directory_entries(&vault.hash_dir),
             "reports": count_directory_entries(&vault.reports_dir),
         },
@@ -228,6 +246,11 @@ fn vault_report_json(vault: &EvidenceVault) -> Value {
             "dir": &vault.android_dir,
             "file_count": count_files_recursive(&vault.android_dir),
             "files": collect_file_entries(&vault.android_dir, REPORT_FILE_LIMIT),
+        },
+        "ios": {
+            "dir": &vault.ios_dir,
+            "file_count": count_files_recursive(&vault.ios_dir),
+            "files": collect_file_entries(&vault.ios_dir, REPORT_FILE_LIMIT),
         },
     })
 }

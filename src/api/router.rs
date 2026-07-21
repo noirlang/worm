@@ -2,8 +2,8 @@
 use crate::server::{Response, json_error, json_ok};
 
 use super::{
-    acquisition_control, android, desktop, developer, evidence, hash_api, profile, ram, settings,
-    system, update, wireguard,
+    acquisition_control, android, desktop, developer, evidence, hash_api, ios, profile, ram,
+    settings, system, update, wireguard,
 };
 
 /// API HTTP metod/path çiftini ilgili endpoint fonksiyonuna yönlendirir ve detaylıca loglar.
@@ -201,6 +201,22 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
                 "Android vaka analiz ozeti talep edildi",
             );
             android::android_case_analysis_endpoint(body)
+        }
+        ("POST", "/api/ios-backup-profile") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:ios",
+                "iOS backup profil bilgisi sorgulaniyor",
+            );
+            ios::ios_backup_profile_endpoint(body)
+        }
+        ("POST", "/api/ios-backup-normalize") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:ios",
+                "iOS backup normalizasyon isi baslatiliyor",
+            );
+            ios::ios_backup_normalize_endpoint(body)
         }
         ("GET", "/api/ram-status") => {
             crate::logging::runtime_log(

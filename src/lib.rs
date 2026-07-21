@@ -9,6 +9,7 @@ pub mod disk_analysis;
 pub mod error;
 pub mod evidence;
 pub mod hash;
+pub mod ios;
 pub mod job;
 pub mod logging;
 pub mod native_window;
