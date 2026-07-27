@@ -164,6 +164,29 @@ pub fn evidence_manifest_endpoint(body: &[u8]) -> Response {
     }
 }
 
+/// Android ve iOS edinim manifestlerinden vaka geçmişini üretir.
+pub fn acquisition_history_endpoint(body: &[u8]) -> Response {
+    #[derive(Deserialize)]
+    struct AcquisitionHistoryRequest {
+        case_name: Option<String>,
+    }
+
+    let request: AcquisitionHistoryRequest = match serde_json::from_slice(body) {
+        Ok(request) => request,
+        Err(err) => return json_error(400, err.to_string()),
+    };
+    let vault = match report_evidence_vault(request.case_name.as_deref()) {
+        Ok(vault) => vault,
+        Err(response) => return response,
+    };
+    let history = acquisition_history_for_vault(&vault);
+    json_ok(json!({
+        "case_name": &vault.case_name,
+        "case_dir": &vault.case_dir,
+        "history": history,
+    }))
+}
+
 /// Varsayılan vaka klasöründeki tüm vakaları listeler.
 pub fn evidence_cases_endpoint() -> Response {
     let base_dir = default_case_base_dir();
@@ -340,5 +363,269 @@ fn report_format(value: &str) -> Option<ReportFormat> {
         "txt" => Some(ReportFormat::Txt),
         "json" => Some(ReportFormat::Json),
         _ => None,
+    }
+}
+
+fn acquisition_history_for_vault(vault: &EvidenceVault) -> Vec<Value> {
+    let mut items = Vec::new();
+    collect_android_history(&vault.android_dir, &mut items);
+    collect_ios_history(&vault.ios_dir, &mut items);
+    items.sort_by(|left, right| {
+        right["sort_key"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(left["sort_key"].as_str().unwrap_or_default())
+    });
+    items
+}
+
+fn collect_android_history(android_dir: &Path, items: &mut Vec<Value>) {
+    let mut manifests = Vec::new();
+    collect_named_files_recursive(android_dir, "android_manifest.json", &mut manifests);
+    for manifest_path in manifests {
+        let Some(item) = android_history_item(android_dir, &manifest_path) else {
+            continue;
+        };
+        items.push(item);
+    }
+}
+
+fn collect_ios_history(ios_dir: &Path, items: &mut Vec<Value>) {
+    let mut manifests = Vec::new();
+    collect_named_files_recursive(ios_dir, "ios_manifest.json", &mut manifests);
+    for manifest_path in manifests {
+        let Some(item) = ios_history_item(ios_dir, &manifest_path) else {
+            continue;
+        };
+        items.push(item);
+    }
+}
+
+fn android_history_item(android_dir: &Path, manifest_path: &Path) -> Option<Value> {
+    let content = fs::read_to_string(manifest_path).ok()?;
+    let manifest: Value = serde_json::from_str(&content).ok()?;
+    let session = manifest.get("session").unwrap_or(&Value::Null);
+    let profile = session.get("device_profile").unwrap_or(&Value::Null);
+    let artifacts = manifest
+        .get("artifacts")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let errors = manifest
+        .get("errors")
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .unwrap_or_default();
+    let failed = artifacts
+        .iter()
+        .filter(|artifact| artifact.get("success").and_then(Value::as_bool) == Some(false))
+        .count();
+    let success = artifacts.len().saturating_sub(failed);
+    let output_dir = manifest_path.parent().unwrap_or(android_dir);
+    let relative_output = relative_path_string(android_dir, output_dir);
+    let generated_at = json_string(&manifest, "generated_at")
+        .or_else(|| json_string(session, "created_at"))
+        .unwrap_or_else(|| file_modified_string(manifest_path));
+
+    Some(json!({
+        "id": format!("android:{relative_output}"),
+        "platform": "android",
+        "kind": json_string(&manifest, "acquisition_type").unwrap_or_else(|| "android".to_string()),
+        "title": android_history_title(&manifest),
+        "subtitle": android_device_label(session, profile),
+        "generated_at": generated_at,
+        "sort_key": file_modified_string(manifest_path),
+        "output_dir": output_dir,
+        "relative_output": relative_output,
+        "manifest_path": manifest_path,
+        "total_bytes": manifest.get("total_bytes").and_then(Value::as_u64).unwrap_or_default(),
+        "success_count": success,
+        "error_count": errors + failed,
+        "status": if errors + failed == 0 { "completed" } else { "warnings" },
+        "serial": json_string(session, "serial"),
+        "model": json_string(profile, "model"),
+        "manifest_sha256": json_string(&manifest, "acquisition_sha256"),
+    }))
+}
+
+fn ios_history_item(ios_dir: &Path, manifest_path: &Path) -> Option<Value> {
+    let content = fs::read_to_string(manifest_path).ok()?;
+    let manifest: Value = serde_json::from_str(&content).ok()?;
+    let device = manifest.get("device").unwrap_or(&Value::Null);
+    let backup = manifest.get("backup").unwrap_or(&Value::Null);
+    let summary = manifest.get("summary").unwrap_or(&Value::Null);
+    let output_dir = manifest_path.parent().unwrap_or(ios_dir);
+    let relative_output = relative_path_string(ios_dir, output_dir);
+    let generated_at =
+        json_string(&manifest, "created_at").unwrap_or_else(|| file_modified_string(manifest_path));
+    let errors = json_usize(summary, "errors");
+    let missing = json_usize(summary, "missing");
+
+    Some(json!({
+        "id": format!("ios:{relative_output}"),
+        "platform": "ios",
+        "kind": "ios_backup_normalize",
+        "title": "iOS backup normalizasyonu",
+        "subtitle": ios_device_label(device),
+        "generated_at": generated_at,
+        "sort_key": file_modified_string(manifest_path),
+        "output_dir": output_dir,
+        "relative_output": relative_output,
+        "manifest_path": manifest_path,
+        "total_bytes": summary.get("total_bytes").and_then(Value::as_u64).unwrap_or_default(),
+        "total_entries": summary.get("total_entries").and_then(Value::as_u64).unwrap_or_default(),
+        "files_copied": summary.get("files_copied").and_then(Value::as_u64).unwrap_or_default(),
+        "success_count": summary.get("files_copied").and_then(Value::as_u64).unwrap_or_default(),
+        "error_count": errors + missing,
+        "status": if errors + missing == 0 { "completed" } else { "warnings" },
+        "serial": json_string(device, "serial_number"),
+        "model": json_string(device, "model"),
+        "ios_version": json_string(device, "ios_version"),
+        "encrypted": backup.get("encrypted").and_then(Value::as_bool).unwrap_or(false),
+    }))
+}
+
+fn collect_named_files_recursive(dir: &Path, file_name: &str, files: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_named_files_recursive(&path, file_name, files);
+        } else if path.file_name().and_then(|name| name.to_str()) == Some(file_name) {
+            files.push(path);
+        }
+    }
+}
+
+fn android_history_title(manifest: &Value) -> String {
+    match json_string(manifest, "acquisition_type")
+        .unwrap_or_default()
+        .as_str()
+    {
+        "android_logical" => "Android mantiksal edinim".to_string(),
+        "android_filesystem" => "Android dosya sistemi edinimi".to_string(),
+        "android_ram" => "Android RAM edinimi".to_string(),
+        value if !value.is_empty() => value.replace('_', " "),
+        _ => "Android edinimi".to_string(),
+    }
+}
+
+fn android_device_label(session: &Value, profile: &Value) -> String {
+    let model = json_string(profile, "model")
+        .or_else(|| json_string(profile, "product"))
+        .unwrap_or_else(|| "Android cihaz".to_string());
+    let serial = json_string(session, "serial").unwrap_or_else(|| "-".to_string());
+    format!("{model} | {serial}")
+}
+
+fn ios_device_label(device: &Value) -> String {
+    let model = json_string(device, "model")
+        .or_else(|| json_string(device, "product_type"))
+        .unwrap_or_else(|| "iOS cihaz".to_string());
+    let version = json_string(device, "ios_version")
+        .map(|value| format!("iOS {value}"))
+        .unwrap_or_else(|| "iOS".to_string());
+    format!("{model} | {version}")
+}
+
+fn relative_path_string(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn file_modified_string(path: &Path) -> String {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .map(|time| {
+            chrono::DateTime::<Local>::from(time)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+fn json_string(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .filter(|item| !item.trim().is_empty())
+}
+
+fn json_usize(value: &Value, key: &str) -> usize {
+    value
+        .get(key)
+        .and_then(Value::as_u64)
+        .and_then(|value| value.try_into().ok())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builds_acquisition_history_from_android_and_ios_manifests() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = EvidenceVault::create(dir.path(), "history_case").unwrap();
+
+        let android_run = vault.android_dir.join("logical_phone_20260727");
+        fs::create_dir_all(&android_run).unwrap();
+        fs::write(
+            android_run.join("android_manifest.json"),
+            serde_json::to_string_pretty(&json!({
+                "acquisition_type": "android_logical",
+                "generated_at": "2026-07-27T10:00:00+03:00",
+                "session": {
+                    "serial": "R5C123",
+                    "created_at": "2026-07-27T10:00:00+03:00",
+                    "device_profile": {
+                        "model": "Pixel 8",
+                        "product": "pixel"
+                    }
+                },
+                "artifacts": [
+                    { "success": true },
+                    { "success": false }
+                ],
+                "total_bytes": 100,
+                "errors": ["one failed"]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let ios_run = vault.ios_dir.join("iphone_20260727");
+        fs::create_dir_all(&ios_run).unwrap();
+        fs::write(
+            ios_run.join("ios_manifest.json"),
+            serde_json::to_string_pretty(&json!({
+                "created_at": "2026-07-27 11:00:00",
+                "device": {
+                    "model": "iPhone 15",
+                    "ios_version": "18.5"
+                },
+                "backup": { "encrypted": false },
+                "summary": {
+                    "total_entries": 10,
+                    "files_copied": 9,
+                    "missing": 1,
+                    "errors": 0,
+                    "total_bytes": 200
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let history = acquisition_history_for_vault(&vault);
+        assert_eq!(history.len(), 2);
+        assert!(history.iter().any(|item| item["platform"] == "android"));
+        assert!(history.iter().any(|item| item["platform"] == "ios"));
     }
 }

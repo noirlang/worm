@@ -56,6 +56,7 @@ const state = {
   activeCase: null,
   pendingCaseName: "",
   cases: [],
+  acquisitionHistory: [],
   caseBaseDir: "",
   profiles: [],
   activeProfile: null,
@@ -497,8 +498,11 @@ function render() {
   }
 
   hydrateIcons(view);
-  if (state.route === "other" && ["evidence", "reports"].includes(state.activeTab)) {
+  if (state.route === "other" && ["evidence", "reports", "history"].includes(state.activeTab)) {
     loadEvidenceCases();
+  }
+  if (state.route === "other" && state.activeTab === "history") {
+    loadAcquisitionHistory();
   }
   if (state.route === "analysis") {
     loadEvidenceCases();
@@ -953,6 +957,10 @@ document.addEventListener("click", (event) => {
     if (detail) detail.innerHTML = boundDetailPanel(state.activeTab);
     hydrateIcons(detail);
     if (["evidence", "reports"].includes(state.activeTab)) loadEvidenceCases();
+    if (state.activeTab === "history") {
+      loadEvidenceCases();
+      loadAcquisitionHistory();
+    }
     return;
   }
 
@@ -1912,6 +1920,11 @@ async function handleAction(button) {
 
   if (action === "create-manifest") {
     await createCaseManifest();
+    return;
+  }
+
+  if (action === "load-history") {
+    await loadAcquisitionHistory({ silent: false });
     return;
   }
 
@@ -2896,6 +2909,30 @@ async function createCaseManifest() {
   } catch (error) {
     setStatus("[data-manifest-status]", `${icon("info")} ${t("case.manifest.failed", { message: escapeHtml(error.message) })}`);
     showToast(t("case.manifest.failed", { message: error.message }), "error");
+  }
+}
+
+async function loadAcquisitionHistory({ silent = true } = {}) {
+  if (!backendReady()) return;
+  const caseName = resolveSelectedCaseName("#history-case", { fallbackToDefault: true });
+  if (!caseName) {
+    if (!silent) showToast(t("case.required"), "error");
+    return;
+  }
+  try {
+    const result = await apiRequest("/api/acquisition-history", {
+      method: "POST",
+      body: JSON.stringify({ case_name: caseName })
+    });
+    state.acquisitionHistory = Array.isArray(result.history) ? result.history : [];
+    const detail = document.querySelector("#other-detail");
+    if (detail && state.activeTab === "history") {
+      detail.innerHTML = boundDetailPanel(state.activeTab);
+      hydrateIcons(detail);
+    }
+    if (!silent) showToast(t("acquisition.history.loaded", { count: String(state.acquisitionHistory.length) }));
+  } catch (error) {
+    if (!silent) showToast(t("acquisition.history.failed", { message: error.message }), "error");
   }
 }
 

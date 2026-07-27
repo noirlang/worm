@@ -352,6 +352,14 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
             );
             evidence::evidence_manifest_endpoint(body)
         }
+        ("POST", "/api/acquisition-history") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:evidence",
+                "Android/iOS edinim gecmisi listeleniyor",
+            );
+            evidence::acquisition_history_endpoint(body)
+        }
         ("GET", "/api/evidence-cases") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Debug,

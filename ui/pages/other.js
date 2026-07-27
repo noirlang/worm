@@ -6,6 +6,7 @@ export function otherPage({ t, icon, state, pageTitle, pickerField, field, escap
         ${simpleCard(t("other.hash.title"), t("other.hash.desc"), "shield", "hash", icon, t)}
         ${simpleCard(t("other.evidence.title"), t("other.evidence.desc"), "scale", "evidence", icon, t)}
         ${simpleCard(t("other.reports.title"), t("other.reports.desc"), "report", "reports", icon, t)}
+        ${simpleCard(t("other.history.title"), t("other.history.desc"), "clock", "history", icon, t)}
         ${simpleCard(t("other.logs.title"), t("other.logs.desc"), "clock", "logs", icon, t)}
       </div>
       <div id="other-detail" class="workflow-panel" style="margin-top:16px">${detailPanel(state.activeTab)}</div>
@@ -66,6 +67,21 @@ export function detailPanel({ tab, t, icon, state, pickerField, field, escapeHtm
       <div class="status-badge" data-report-status>${icon("info")} ${t("ready")}</div>
     `;
   }
+  if (tab === "history") {
+    const history = Array.isArray(state.acquisitionHistory) ? state.acquisitionHistory : [];
+    return `
+      <p class="section-label">${t("other.history.title")}</p>
+      <p class="field-hint">${t("acquisition.history.hint")}</p>
+      ${field(t("report.case"), `<select id="history-case" class="select" data-case-select>${caseSelectOptions(state.activeCase?.case_name)}</select>`)}
+      <div class="button-row">
+        <button class="secondary-button" data-action="refresh-cases">${icon("refresh")} ${t("case.refresh")}</button>
+        <button class="primary-button" data-action="load-history">${icon("clock")} ${t("acquisition.history.load")}</button>
+      </div>
+      <div class="acquisition-history-list">
+        ${history.length ? history.map((item) => historyItem(item, t, icon, escapeHtml)).join("") : `<div class="log-box">${t("acquisition.history.empty")}</div>`}
+      </div>
+    `;
+  }
   if (tab === "logs") {
     return `
       <p class="section-label">${t("other.logs.title")}</p>
@@ -77,6 +93,40 @@ export function detailPanel({ tab, t, icon, state, pickerField, field, escapeHtm
     `;
   }
   return hashPanel({ t, icon, pickerField, field });
+}
+
+function historyItem(item, t, icon, escapeHtml) {
+  const platform = item.platform === "ios" ? "ios" : "android";
+  const statusClass = item.status === "completed" ? "ok" : "warn";
+  const statusText = item.status === "completed" ? t("acquisition.history.completed") : t("acquisition.history.warnings");
+  const metrics = [
+    item.total_entries != null ? `${t("acquisition.history.entries")}: ${item.total_entries}` : "",
+    item.success_count != null ? `${t("acquisition.history.success")}: ${item.success_count}` : "",
+    item.error_count != null ? `${t("acquisition.history.errors")}: ${item.error_count}` : "",
+    item.total_bytes != null ? formatHistoryBytes(Number(item.total_bytes || 0)) : ""
+  ].filter(Boolean).join(" · ");
+  return `
+    <article class="acquisition-history-item">
+      <span class="metric-icon">${icon(platform)}</span>
+      <div>
+        <div class="history-title-row">
+          <strong>${escapeHtml(item.title || "-")}</strong>
+          <span class="status-pill ${statusClass}">${escapeHtml(statusText)}</span>
+        </div>
+        <small>${escapeHtml(item.subtitle || "-")}</small>
+        <small>${escapeHtml(item.generated_at || "-")}</small>
+        <small class="path-text">${escapeHtml(item.output_dir || item.relative_output || "-")}</small>
+        ${metrics ? `<small>${escapeHtml(metrics)}</small>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function formatHistoryBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, index)).toFixed(index > 0 ? 1 : 0)} ${units[index]}`;
 }
 
 export function hashPanel({ t, icon, pickerField, field }) {

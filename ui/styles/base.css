@@ -1319,6 +1319,44 @@ button {
   line-height: 1.45;
 }
 
+.acquisition-history-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.acquisition-history-item {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.acquisition-history-item:last-child {
+  border-bottom: 0;
+}
+
+.history-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.history-title-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-text {
+  overflow-wrap: anywhere;
+}
+
 .doc-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1624,7 +1662,7 @@ code {
 }
 
 .other-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .section-heading {
