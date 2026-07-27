@@ -710,6 +710,25 @@ fn online_api_base_url() -> String {
         .unwrap_or_else(|| "https://amele.noirlang.tr".to_string())
 }
 
+fn online_origin() -> String {
+    origin_from_url(&online_api_base_url())
+        .unwrap_or_else(|| "https://amele.noirlang.tr".to_string())
+}
+
+fn origin_from_url(url: &str) -> Option<String> {
+    let scheme_end = url.find("://")?;
+    let scheme = &url[..scheme_end];
+    if !matches!(scheme, "http" | "https") {
+        return None;
+    }
+    let rest = &url[scheme_end + 3..];
+    let host = rest.split('/').next()?.trim();
+    if host.is_empty() {
+        return None;
+    }
+    Some(format!("{scheme}://{host}"))
+}
+
 #[derive(Debug, Deserialize)]
 struct OnlineAuthResponse {
     user: OnlineUserResponse,
@@ -832,10 +851,7 @@ fn online_fetch_licenses(token: &str) -> AmeleResult<Vec<OnlineLicenseSummary>> 
 
 fn online_get_json(url: &str, bearer: Option<&str>) -> AmeleResult<Value> {
     let agent = online_agent();
-    let mut request = agent.get(url).set("Accept", "application/json");
-    if let Some(token) = bearer {
-        request = request.set("Authorization", &format!("Bearer {token}"));
-    }
+    let request = apply_online_headers(agent.get(url), bearer);
     let response = request
         .call()
         .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
@@ -844,13 +860,8 @@ fn online_get_json(url: &str, bearer: Option<&str>) -> AmeleResult<Value> {
 
 fn online_post_json(url: &str, bearer: Option<&str>, payload: &Value) -> AmeleResult<Value> {
     let agent = online_agent();
-    let mut request = agent
-        .post(url)
-        .set("Accept", "application/json")
-        .set("Content-Type", "application/json");
-    if let Some(token) = bearer {
-        request = request.set("Authorization", &format!("Bearer {token}"));
-    }
+    let request =
+        apply_online_headers(agent.post(url), bearer).set("Content-Type", "application/json");
     let response = request
         .send_string(&payload.to_string())
         .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
@@ -861,6 +872,21 @@ fn online_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(12))
         .build()
+}
+
+fn apply_online_headers(request: ureq::Request, bearer: Option<&str>) -> ureq::Request {
+    let origin = online_origin();
+    let referer = format!("{origin}/");
+    let request = request
+        .set("Accept", "application/json")
+        .set("Origin", &origin)
+        .set("Referer", &referer)
+        .set("User-Agent", concat!("Amele/", env!("CARGO_PKG_VERSION")));
+    if let Some(token) = bearer {
+        request.set("Authorization", &format!("Bearer {token}"))
+    } else {
+        request
+    }
 }
 
 fn parse_online_response(response: ureq::Response) -> AmeleResult<Value> {
@@ -1114,5 +1140,24 @@ mod tests {
         };
 
         assert!(online_profile_unlocks_mobile_tools(&online));
+    }
+
+    #[test]
+    fn derives_origin_from_online_api_base_url() {
+        assert_eq!(
+            origin_from_url("https://amele.noirlang.tr/api").as_deref(),
+            Some("https://amele.noirlang.tr")
+        );
+        assert_eq!(
+            origin_from_url("http://localhost:8080").as_deref(),
+            Some("http://localhost:8080")
+        );
+        assert!(origin_from_url("file:///tmp/api").is_none());
+    }
+
+    #[test]
+    fn masks_license_keys_before_profile_storage() {
+        assert_eq!(mask_secret("AMELE-1234-5678"), "****5678");
+        assert_eq!(mask_secret(""), "");
     }
 }

@@ -295,7 +295,10 @@ function renderProfileGate(errorMessage = "") {
   const isCreate = !isOnline && (state.profileGateMode === "create" || !state.profiles.length);
   const cards = state.profiles.map((profile) => `
     <button class="profile-card" data-action="profile-select" data-username="${escapeHtml(profile.username)}">
-      <span class="profile-avatar">${profileInitials(profile)}</span>
+      <span class="profile-card-top">
+        <span class="profile-avatar">${profileInitials(profile)}</span>
+        ${profile.online ? `<span class="online-profile-mark" title="${escapeHtml(t("profile.onlineConnectedShort"))}">${icon("globe")}</span>` : ""}
+      </span>
       <strong>${escapeHtml(profile.full_name || profile.username)}</strong>
       <small>@${escapeHtml(profile.username)}</small>
     </button>

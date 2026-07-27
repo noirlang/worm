@@ -126,6 +126,30 @@
   border-color: var(--text);
 }
 
+.profile-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.online-profile-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.online-profile-mark svg {
+  width: 15px;
+  height: 15px;
+}
+
 .profile-avatar {
   display: inline-grid;
   place-items: center;
