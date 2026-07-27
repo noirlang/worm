@@ -73,6 +73,7 @@ fn main() {
         Some("profile-create") => profile_create_command(args.collect()),
         Some("profile-use") | Some("profile-select") => profile_use_command(args.collect()),
         Some("profile-logout") => profile_logout_command(),
+        Some("profile-online-sync") | Some("online-sync") => profile_online_sync_command(),
         Some("hash") => hash_command(args.collect()),
         Some("disk-list") => disk_list_command(),
         Some("local-image") => local_image_command(args.collect()),
@@ -251,6 +252,7 @@ fn print_help() {
                profile-create <name> <user> [tr|en] [dark|light] [--direct]\n\
                profile-use <user> [--direct]           Select profile for CLI/next launch\n\
                profile-logout                          Disable automatic profile login\n\
+               profile-online-sync                     Synchronize active online profile\n\
                --profile <user> <command>              Execute single command under this profile\n\
                disk-list                               List local disks\n\
                local-image <src> <case> [disk_name] [raw|aff4]  Acquire local disk/file image\n\
@@ -304,6 +306,7 @@ fn print_help() {
                profile-create <isim> <kullanici> [tr|en] [dark|light] [--direct]\n\
                profile-use <kullanici> [--direct]      CLI/sonraki acilis icin profil sec\n\
                profile-logout                          Otomatik profil acilisini kapat\n\
+               profile-online-sync                     Aktif online profili senkronize et\n\
                --profile <kullanici> <komut>           Tek komutu bu profil altinda calistir\n\
                disk-list                               Yerel diskleri listele\n\
                local-image <kaynak> <vaka> [disk_adı] [raw|aff4]  Yerel disk/dosya imaji al\n\
@@ -407,6 +410,16 @@ fn profile_use_command(args: Vec<String>) -> Result<(), String> {
 fn profile_logout_command() -> Result<(), String> {
     amele::profile::logout_profile().map_err(|err| err.to_string())?;
     print_json(&json!({ "ok": true }))
+}
+
+/// CLI üzerinden aktif profilin online bilgilerini yeniler.
+fn profile_online_sync_command() -> Result<(), String> {
+    let profile = amele::profile::sync_active_online_profile()
+        .map_err(|err| crate_diagnostic(err.to_string()))?;
+    print_json(&json!({
+        "profile": profile,
+        "access": amele::profile::mobile_tools_access(),
+    }))
 }
 
 /// Verilen dosya için seçilen hash algoritmasını çalıştırır.

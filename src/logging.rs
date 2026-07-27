@@ -11,10 +11,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 /// Günlük seviyelerini sıralı önem derecesiyle temsil eder.
 pub enum LogLevel {
+    Debug,
     Info,
     Warn,
     Error,
-    Debug,
 }
 
 impl LogLevel {

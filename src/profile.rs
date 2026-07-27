@@ -321,7 +321,7 @@ pub fn link_online_profile(
         Ok(licenses) => licenses,
         Err(err) => {
             crate::logging::runtime_log(
-                crate::logging::LogLevel::Warn,
+                crate::logging::LogLevel::Debug,
                 "profile:online",
                 format!("Online lisanslar okunamadı: {err}"),
             );
@@ -419,12 +419,11 @@ pub fn sync_active_online_profile() -> AmeleResult<LocalProfile> {
     let token = load_online_token(&current.username)?;
     let session_user = online_fetch_session(&token)?;
     ensure_session_matches_profile(&session_user, &current_online)?;
-    let user = online_fetch_user(&token, &current_online.username)?;
     let licenses = match online_fetch_licenses(&token) {
         Ok(licenses) => licenses,
         Err(err) => {
             crate::logging::runtime_log(
-                crate::logging::LogLevel::Warn,
+                crate::logging::LogLevel::Debug,
                 "profile:online",
                 format!("Online lisanslar senkronlanamadı: {err}"),
             );
@@ -439,7 +438,7 @@ pub fn sync_active_online_profile() -> AmeleResult<LocalProfile> {
         if profile.username == current.username {
             let worked_case_types = worked_case_types_from_log(&profile.activity_log);
             let online = online_profile_from_user(
-                user,
+                session_user.clone(),
                 licenses,
                 current_online.linked_at,
                 now,
@@ -515,9 +514,7 @@ pub fn require_mobile_tools_access() -> AmeleResult<()> {
         .map_err(|_| AmeleError::new(HataKodu::YetkisizErisim, mobile_tools_required_message()))?;
     let session_user = online_fetch_session(&token)?;
     ensure_session_matches_profile(&session_user, online)?;
-    let current_user = online_fetch_user(&token, &online.username)?;
-    ensure_session_matches_profile(&current_user, online)?;
-    if online_user_unlocks_mobile_tools(&current_user) {
+    if online_user_unlocks_mobile_tools(&session_user) {
         return Ok(());
     }
     Err(AmeleError::new(
@@ -790,12 +787,6 @@ fn online_login(identifier: &str, password: &str) -> AmeleResult<OnlineAuthRespo
     parse_online_auth_response(response.value, response.session_cookie)
 }
 
-fn online_fetch_user(token: &str, username: &str) -> AmeleResult<OnlineUserResponse> {
-    let url = format!("{}/api/users/{}", online_api_base_url(), username);
-    let value = online_get_json(&url, Some(token))?;
-    parse_required_online_user(&value, "Online kullanıcı cevabı parse edilemedi")
-}
-
 fn online_fetch_session(token: &str) -> AmeleResult<OnlineUserResponse> {
     let url = format!("{}/api/auth/session", online_api_base_url());
     let value = online_get_json(&url, Some(token))?;
@@ -809,7 +800,7 @@ fn online_fetch_session(token: &str) -> AmeleResult<OnlineUserResponse> {
 
 fn online_fetch_licenses(token: &str) -> AmeleResult<Vec<OnlineLicenseSummary>> {
     let url = format!("{}/api/licenses/my", online_api_base_url());
-    let value = online_get_json(&url, Some(token))?;
+    let value = online_get_json_connection_close(&url, Some(token))?;
     let envelope: OnlineLicensesEnvelope = serde_json::from_value(response_payload(&value).clone())
         .map_err(|err| {
             AmeleError::new(
@@ -833,6 +824,15 @@ fn online_fetch_licenses(token: &str) -> AmeleResult<Vec<OnlineLicenseSummary>> 
 fn online_get_json(url: &str, bearer: Option<&str>) -> AmeleResult<Value> {
     let agent = online_agent();
     let request = apply_online_headers(agent.get(url), bearer);
+    let response = request
+        .call()
+        .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
+    parse_online_response(response).map(|response| response.value)
+}
+
+fn online_get_json_connection_close(url: &str, bearer: Option<&str>) -> AmeleResult<Value> {
+    let agent = online_agent();
+    let request = apply_online_headers(agent.get(url), bearer).set("Connection", "close");
     let response = request
         .call()
         .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
