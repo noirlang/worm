@@ -264,7 +264,10 @@ jobs:
           RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
         shell: pwsh
         run: |
-          $Assets = Get-ChildItem release-assets -File | ForEach-Object { $_.FullName }
+          $Assets = Get-ChildItem release-assets -File | ForEach-Object { "release-assets/$($_.Name)" }
+          if (-not $Assets) {
+            throw "No Windows release assets found"
+          }
           gh release upload $env:RELEASE_TAG @Assets `
             --repo $env:GITHUB_REPOSITORY `
             --clobber
