@@ -14,6 +14,7 @@ use std::thread;
 use std::time::Duration;
 
 const COPY_BUFFER_SIZE: usize = 1024 * 1024;
+pub const ENCRYPTED_BACKUP_GUIDANCE: &str = "Sifreli iOS backup algilandi. Amele su anda kaynagi degistirmeden yalnizca sifresiz veya onceden decrypt edilmis iTunes/Finder backup klasorlerini normalize eder. iTunes/Finder icinde backup sifrelemesini kapatip yeni backup alin veya Manifest.db ve dosyalari cozulmus bir klasor secin.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// iOS backup klasöründen hızlıca okunabilen cihaz ve backup profilidir.
@@ -173,7 +174,7 @@ where
     if info.encrypted {
         return Err(AmeleError::new(
             HataKodu::IcerikGecersiz,
-            "Sifreli iOS backup algilandi. Bu native normalizer su anda sifresi kaldirilmis/decrypted backup klasorlerini isler.",
+            ENCRYPTED_BACKUP_GUIDANCE,
         ));
     }
 

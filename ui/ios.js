@@ -45,7 +45,7 @@ export function iosPage({ t, icon, pageTitle, state, escapeHtml, backendReady, c
 
           <div class="section-divider"></div>
           <p class="section-label">${t("ios.normalize.title")}</p>
-          ${encrypted ? `<div class="error-panel">${escapeHtml(t("ios.encrypted.warning"))}</div>` : ""}
+          ${encrypted ? iosEncryptedGuidance(t, icon, escapeHtml) : ""}
           <div class="button-row">
             <button class="primary-button" data-action="ios-start-normalize" ${startDisabled}>${icon("ios")} ${t("ios.normalize.start")}</button>
             ${isRunning ? `<button class="secondary-button" data-action="ios-pause-normalize">${icon("pause")} ${t("workflow.pause")}</button>` : ""}
@@ -70,6 +70,16 @@ export function iosPage({ t, icon, pageTitle, state, escapeHtml, backendReady, c
         </aside>
       </div>
     </section>
+  `;
+}
+
+function iosEncryptedGuidance(t, icon, escapeHtml) {
+  return `
+    <div class="error-panel">
+      <strong>${icon("key")} ${escapeHtml(t("ios.encrypted.title"))}</strong>
+      <p>${escapeHtml(t("ios.encrypted.warning"))}</p>
+      <p>${escapeHtml(t("ios.encrypted.nextStep"))}</p>
+    </div>
   `;
 }
 

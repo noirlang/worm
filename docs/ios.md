@@ -21,7 +21,7 @@ gerektirmez.
 |-----|-------|----------|
 | Şifresiz iTunes/Finder backup | Aktif | `Manifest.db` doğrudan okunur ve dosyalar normalize edilir. |
 | Önceden decrypt edilmiş backup | Aktif | Backup2FS veya eşdeğer araçla decrypt edilmiş klasör işlenebilir. |
-| Şifreli iOS backup | Kontrollü uyarı | Native normalizer şimdilik şifre çözmez; önce şifresi kaldırılmış/decrypted klasör gerekir. |
+| Şifreli iOS backup | Kontrollü uyarı | Amele kaynak backup'ı değiştirmez ve şifre çözmez. iTunes/Finder içinde backup şifrelemesini kapatıp yeni şifresiz backup alın veya Manifest.db ve dosyaları önceden decrypt edilmiş klasörü seçin. |
 
 ### Çıktı Klasör Yapısı
 
@@ -92,7 +92,7 @@ dotnet runtime.
 |------|--------|-------------|
 | Unencrypted iTunes/Finder backup | Active | `Manifest.db` is read directly and files are normalized. |
 | Already decrypted backup | Active | A folder decrypted by Backup2FS or an equivalent tool can be processed. |
-| Encrypted iOS backup | Guarded warning | The native normalizer does not decrypt yet; provide an unencrypted/decrypted backup folder first. |
+| Encrypted iOS backup | Guarded warning | Amele does not modify or decrypt the source backup. Disable backup encryption in iTunes/Finder and create a new unencrypted backup, or select a folder where Manifest.db and the files are already decrypted. |
 
 ### Output Layout
 
