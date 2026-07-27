@@ -302,7 +302,7 @@ function renderProfileGate(errorMessage = "") {
       </span>
       <strong>${escapeHtml(profile.full_name || profile.username)}</strong>
       <small>@${escapeHtml(profile.username)}</small>
-      ${profile.online ? `<small class="profile-card-status">${icon("globe")} ${t("profile.onlineAccount")}</small>` : ""}
+      ${profile.online ? `<small class="profile-card-status">${icon("globe")} ${t("profile.onlineAccount")} @${escapeHtml(profile.online.username || "-")}</small>` : ""}
     </button>
   `).join("");
   profileGate.innerHTML = `
@@ -847,13 +847,14 @@ function localAccountCard(profile, state, t, icon, escapeHtml) {
 
 function onlineAccountCard(profile, online, state, t, icon, escapeHtml) {
   const mobileAllowed = onlineMobileToolsAllowed();
+  const onlineName = onlineDisplayName(online);
   return `
     <article class="settings-card settings-primary">
       <span class="settings-kicker">${t("profile.onlineAccount")}</span>
       <div class="profile-summary">
-        <span class="profile-avatar large">${profile ? profileInitials(profile) : "A"}</span>
+        <span class="profile-avatar large">${profileInitials({ full_name: onlineName, username: online.username })}</span>
         <div>
-          <h3>${escapeHtml(profile?.full_name || online.username || t("profile.noActive"))}</h3>
+          <h3>${escapeHtml(onlineName || t("profile.noActive"))}</h3>
           <p>@${escapeHtml(online.username || profile?.username || "-")}</p>
         </div>
       </div>
@@ -924,6 +925,14 @@ function profilePreferenceRows(profile, state, t, escapeHtml) {
       <small>${escapeHtml(state.caseBaseDir || "~/Amele/Kullanicilar/.../Vakalar")}</small>
     </div>
   `;
+}
+
+function onlineDisplayName(online) {
+  const fullName = [online?.first_name, online?.last_name]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  return fullName || online?.username || "";
 }
 
 function onlineRoleBadges(online, t, escapeHtml) {

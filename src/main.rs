@@ -291,6 +291,7 @@ fn print_help() {
                disk-size <device|file>       Get disk or file size\n\
                remote-tool-check <ip> <port> <winpmem|avml> [token]\n\
                ram-status                    Print local AVML/WinPMEM status\n\n\
+             Note: Android/iOS CLI commands require a connected online profile.\n\
              Note: the main binary command is amele-forensic-tool; amele alias is also available for backward compatibility."
         );
     } else {
@@ -343,6 +344,7 @@ fn print_help() {
                disk-size <cihaz|dosya>       Disk veya dosya boyutu al\n\
                remote-tool-check <ip> <port> <winpmem|avml> [token]\n\
                ram-status                    Yerel AVML/WinPMEM durumunu yazdir\n\n\
+             Not: Android/iOS CLI komutlari bagli online profil gerektirir.\n\
              Not: paketlerde ana komut amele-forensic-tool'dur; geriye uyumluluk icin amele alias'i da bulunabilir."
         );
     }
@@ -650,11 +652,13 @@ fn ram_processes_command(args: Vec<String>) -> Result<(), String> {
 
 /// ADB kurulum durumunu JSON olarak yazar.
 fn android_adb_status_command() -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     print_json(&android::adb_status())
 }
 
 /// ADB'yi uygun paket yöneticisiyle kurmayı dener.
 fn android_adb_install_command() -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     let result = android::install_adb()
         .map_err(|err| crate_diagnostic(android::explain_android_error(err)))?;
     print_json(&result)
@@ -662,13 +666,19 @@ fn android_adb_install_command() -> Result<(), String> {
 
 /// ADB ile bağlı Android cihazlarını listeler.
 fn android_devices_command() -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     let devices = android::list_devices()
         .map_err(|err| crate_diagnostic(android::explain_android_error(err)))?;
     print_json(&devices)
 }
 
+fn require_cli_mobile_tools_access() -> Result<(), String> {
+    amele::profile::require_mobile_tools_access().map_err(|err| crate_diagnostic(err.to_string()))
+}
+
 /// Android cihaz profilini çıkarır.
 fn android_profile_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.is_empty() {
         return Err("Kullanim: android-profile <serial>".to_string());
     }
@@ -679,6 +689,7 @@ fn android_profile_command(args: Vec<String>) -> Result<(), String> {
 
 /// Android mantıksal edinimi vaka klasörüne yazar.
 fn android_logical_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.len() < 2 {
         return Err("Kullanim: android-logical <serial> <vaka> [quick|full|root]".to_string());
     }
@@ -703,6 +714,7 @@ fn android_logical_command(args: Vec<String>) -> Result<(), String> {
 
 /// Android dosya sistemi edinimini vaka klasörüne yazar.
 fn android_filesystem_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.len() < 2 {
         return Err("Kullanim: android-filesystem <serial> <vaka> [--root]".to_string());
     }
@@ -724,6 +736,7 @@ fn android_filesystem_command(args: Vec<String>) -> Result<(), String> {
 
 /// Android uçucu veri/RAM edinimini vaka klasörüne yazar.
 fn android_ram_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.len() < 2 {
         return Err(
             "Kullanim: android-ram <serial> <vaka> [volatile|root|physical] [--root]".to_string(),
@@ -751,6 +764,7 @@ fn android_ram_command(args: Vec<String>) -> Result<(), String> {
 
 /// Android cihazın hangi edinim modlarına uygun olduğunu raporlar.
 fn android_capabilities_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.is_empty() {
         return Err("Kullanim: android-capabilities <serial>".to_string());
     }
@@ -765,6 +779,7 @@ fn android_capabilities_command(args: Vec<String>) -> Result<(), String> {
 
 /// Lemon fiziksel RAM aracı için cihaz ön kontrolünü çalıştırır.
 fn android_lemon_preflight_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.is_empty() {
         return Err("Kullanim: android-lemon-preflight <serial>".to_string());
     }
@@ -774,6 +789,7 @@ fn android_lemon_preflight_command(args: Vec<String>) -> Result<(), String> {
 
 /// TCP/IP ADB veya MESH relay endpoint'ine bağlanır.
 fn android_remote_connect_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.is_empty() {
         return Err(
             "Kullanim: android-remote-connect <host> [port] [tcp|mesh] [etiket]".to_string(),
@@ -808,6 +824,7 @@ fn android_remote_connect_command(args: Vec<String>) -> Result<(), String> {
 
 /// Uzak Android ADB bağlantısını keser.
 fn android_remote_disconnect_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.is_empty() {
         return Err("Kullanim: android-remote-disconnect <serial>".to_string());
     }
@@ -817,6 +834,7 @@ fn android_remote_disconnect_command(args: Vec<String>) -> Result<(), String> {
 
 /// Seçilen vakanın Android çıktılarından analiz özeti üretir.
 fn android_case_analysis_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.is_empty() {
         return Err("Kullanim: android-case-analysis <vaka>".to_string());
     }
@@ -827,6 +845,7 @@ fn android_case_analysis_command(args: Vec<String>) -> Result<(), String> {
 
 /// iOS backup profil bilgisini JSON olarak yazar.
 fn ios_backup_profile_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.is_empty() {
         return Err("Kullanim: ios-backup-profile <backup_klasoru>".to_string());
     }
@@ -836,6 +855,7 @@ fn ios_backup_profile_command(args: Vec<String>) -> Result<(), String> {
 
 /// iOS backup klasörünü vaka ios klasörüne Backup2FS düzeninde normalize eder.
 fn ios_backup_normalize_command(args: Vec<String>) -> Result<(), String> {
+    require_cli_mobile_tools_access()?;
     if args.len() < 2 {
         return Err("Kullanim: ios-backup-normalize <backup_klasoru> <vaka>".to_string());
     }

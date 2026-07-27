@@ -309,8 +309,8 @@ pub fn link_online_profile(
     open_directly: bool,
 ) -> AmeleResult<LocalProfile> {
     let auth = online_login(identifier, password)?;
-    let username = sanitize_username(&auth.user.username);
-    if username.is_empty() {
+    let online_username = sanitize_username(&auth.user.username);
+    if online_username.is_empty() {
         return Err(AmeleError::new(
             HataKodu::IcerikGecersiz,
             "Online kullanıcı adı geçersiz",
@@ -331,10 +331,18 @@ pub fn link_online_profile(
 
     let now = now_string();
     let mut store = load_profile_store()?;
+    let local_username = active_username()
+        .filter(|username| {
+            store
+                .profiles
+                .iter()
+                .any(|profile| profile.username == *username)
+        })
+        .unwrap_or_else(|| online_username.clone());
     let existing_index = store
         .profiles
         .iter()
-        .position(|profile| profile.username == username);
+        .position(|profile| profile.username == local_username);
     let existing_activity = existing_index
         .and_then(|index| store.profiles.get(index))
         .map(|profile| profile.activity_log.clone())
@@ -362,8 +370,6 @@ pub fn link_online_profile(
 
     let profile = if let Some(index) = existing_index {
         let profile = &mut store.profiles[index];
-        profile.full_name = full_name;
-        profile.display_name = display_name_from(&profile.full_name, &profile.username);
         profile.language = normalize_language(language);
         profile.theme = normalize_theme(theme);
         profile.open_directly = open_directly;
@@ -372,9 +378,9 @@ pub fn link_online_profile(
         profile.clone()
     } else {
         let profile = LocalProfile {
-            username: username.clone(),
+            username: local_username.clone(),
             full_name,
-            display_name: display_name_from(&online_full_name(&online), &username),
+            display_name: display_name_from(&online_full_name(&online), &local_username),
             language: normalize_language(language),
             theme: normalize_theme(theme),
             open_directly,
@@ -439,8 +445,6 @@ pub fn sync_active_online_profile() -> AmeleResult<LocalProfile> {
                 now,
                 worked_case_types,
             );
-            profile.full_name = online_full_name(&online);
-            profile.display_name = display_name_from(&profile.full_name, &profile.username);
             profile.online = Some(online);
             updated = Some(profile.clone());
             break;
