@@ -264,11 +264,12 @@ jobs:
           RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
         shell: pwsh
         run: |
-          $Assets = Get-ChildItem release-assets -File | ForEach-Object { "release-assets/$($_.Name)" }
-          if (-not $Assets) {
-            throw "No Windows release assets found"
+          $Asset = Get-ChildItem release-assets -File -Filter "*.msi" | Select-Object -First 1
+          if ($null -eq $Asset) {
+            throw "No Windows MSI release asset found"
           }
-          gh release upload $env:RELEASE_TAG @Assets `
+          $AssetPath = Join-Path "release-assets" $Asset.Name
+          gh release upload $env:RELEASE_TAG $AssetPath `
             --repo $env:GITHUB_REPOSITORY `
             --clobber
 
