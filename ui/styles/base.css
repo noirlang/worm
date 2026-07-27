@@ -150,6 +150,19 @@
   height: 15px;
 }
 
+.profile-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.profile-card-status svg {
+  width: 14px;
+  height: 14px;
+}
+
 .profile-avatar {
   display: inline-grid;
   place-items: center;

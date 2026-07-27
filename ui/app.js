@@ -234,6 +234,7 @@ async function saveSettingsFromControls() {
   if (state.activeProfile) {
     state.activeProfile.language = state.language;
     state.activeProfile.theme = state.theme;
+    upsertProfile(state.activeProfile);
     syncProfileButton();
   }
   return result;
@@ -301,6 +302,7 @@ function renderProfileGate(errorMessage = "") {
       </span>
       <strong>${escapeHtml(profile.full_name || profile.username)}</strong>
       <small>@${escapeHtml(profile.username)}</small>
+      ${profile.online ? `<small class="profile-card-status">${icon("globe")} ${t("profile.onlineAccount")}</small>` : ""}
     </button>
   `).join("");
   profileGate.innerHTML = `
@@ -787,6 +789,10 @@ const routes = {
 function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
   const profile = state.activeProfile;
   const online = profile?.online || null;
+  const accountCard = online
+    ? onlineAccountCard(profile, online, state, t, icon, escapeHtml)
+    : localAccountCard(profile, state, t, icon, escapeHtml);
+  const onlineConnectCard = online ? "" : onlineDisconnectedCard(t, icon);
   const caseCards = state.cases.length
     ? state.cases.map((item) => `
         <article class="case-profile-card">
@@ -806,65 +812,8 @@ function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
     <section class="page">
       ${pageTitle(t("profile.title"), t("profile.desc"), "user", icon)}
       <div class="settings-layout">
-        <article class="settings-card settings-primary">
-          <span class="settings-kicker">${t("profile.account")}</span>
-          <div class="profile-summary">
-            <span class="profile-avatar large">${profile ? profileInitials(profile) : "A"}</span>
-            <div>
-              <h3>${escapeHtml(profile?.full_name || t("profile.noActive"))}</h3>
-              <p>@${escapeHtml(profile?.username || "-")}</p>
-            </div>
-          </div>
-          <div class="settings-row">
-            <strong>${t("settings.language")}</strong>
-            <span>${profile?.language === "en" ? "English" : "Türkçe"}</span>
-          </div>
-          <div class="settings-row">
-            <strong>${t("profile.theme")}</strong>
-            <span>${profile?.theme === "light" ? t("profile.themeLight") : t("profile.themeDark")}</span>
-          </div>
-          <div class="settings-row">
-            <strong>${t("case.location")}</strong>
-            <small>${escapeHtml(state.caseBaseDir || "~/Amele/Kullanicilar/.../Vakalar")}</small>
-          </div>
-          <div class="button-row">
-            <button class="secondary-button" data-action="profile-new">${icon("user")} ${t("profile.newProfile")}</button>
-            <button class="danger-button" data-action="profile-logout">${icon("stop")} ${t("profile.logout")}</button>
-          </div>
-        </article>
-        <article class="settings-card">
-          <span class="settings-kicker">${t("profile.onlineAccount")}</span>
-          <h3>${online ? escapeHtml(online.username || profile?.username || "-") : t("profile.onlineDisconnected")}</h3>
-          <div class="settings-row">
-            <strong>${t("profile.onlineStatus")}</strong>
-            <span class="status-pill ${online ? "ok" : "warn"}">${online ? t("profile.onlineConnectedShort") : t("profile.onlineDisconnectedShort")}</span>
-          </div>
-          <div class="settings-row">
-            <strong>${t("profile.roles")}</strong>
-            <span class="role-list">${onlineRoleBadges(online, t, escapeHtml)}</span>
-          </div>
-          <div class="settings-row">
-            <strong>${t("profile.license")}</strong>
-            <span>${onlineLicenseText(online, t, escapeHtml)}</span>
-          </div>
-          <div class="settings-row">
-            <strong>${t("profile.mobileAccess")}</strong>
-            <span class="status-pill ${onlineMobileToolsAllowed() ? "ok" : "danger"}">${onlineMobileToolsAllowed() ? t("profile.mobileUnlocked") : t("profile.mobileLocked")}</span>
-          </div>
-          <div class="settings-row">
-            <strong>${t("profile.workedTypes")}</strong>
-            <span>${workedCaseTypesText(online, t, escapeHtml)}</span>
-          </div>
-          <div class="settings-row">
-            <strong>${t("profile.lastSync")}</strong>
-            <small>${escapeHtml(online?.last_sync_at || "-")}</small>
-          </div>
-          <div class="button-row">
-            ${online ? `<button class="secondary-button" data-action="profile-online-sync">${icon("refresh")} ${t("profile.onlineSync")}</button>` : `<button class="primary-button" data-action="profile-online-start">${icon("globe")} ${t("profile.onlineConnect")}</button>`}
-            ${online ? `<button class="danger-button" data-action="profile-online-logout">${icon("stop")} ${t("profile.onlineDisconnect")}</button>` : ""}
-          </div>
-          ${profileActivityHtml(profile, t, icon, escapeHtml)}
-        </article>
+        ${accountCard}
+        ${onlineConnectCard}
         <article class="settings-card">
           <span class="settings-kicker">${t("profile.cases")}</span>
           <h3>${t("profile.caseTitle")}</h3>
@@ -872,6 +821,108 @@ function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
         </article>
       </div>
     </section>
+  `;
+}
+
+function localAccountCard(profile, state, t, icon, escapeHtml) {
+  return `
+    <article class="settings-card settings-primary">
+      <span class="settings-kicker">${t("profile.account")}</span>
+      <div class="profile-summary">
+        <span class="profile-avatar large">${profile ? profileInitials(profile) : "A"}</span>
+        <div>
+          <h3>${escapeHtml(profile?.full_name || t("profile.noActive"))}</h3>
+          <p>@${escapeHtml(profile?.username || "-")}</p>
+        </div>
+      </div>
+      ${profilePreferenceRows(profile, state, t, escapeHtml)}
+      <div class="button-row">
+        <button class="secondary-button" data-action="profile-new">${icon("user")} ${t("profile.newProfile")}</button>
+        <button class="danger-button" data-action="profile-logout">${icon("stop")} ${t("profile.logout")}</button>
+      </div>
+      ${profileActivityHtml(profile, t, icon, escapeHtml)}
+    </article>
+  `;
+}
+
+function onlineAccountCard(profile, online, state, t, icon, escapeHtml) {
+  const mobileAllowed = onlineMobileToolsAllowed();
+  return `
+    <article class="settings-card settings-primary">
+      <span class="settings-kicker">${t("profile.onlineAccount")}</span>
+      <div class="profile-summary">
+        <span class="profile-avatar large">${profile ? profileInitials(profile) : "A"}</span>
+        <div>
+          <h3>${escapeHtml(profile?.full_name || online.username || t("profile.noActive"))}</h3>
+          <p>@${escapeHtml(online.username || profile?.username || "-")}</p>
+        </div>
+      </div>
+      ${profilePreferenceRows(profile, state, t, escapeHtml)}
+      <div class="settings-row">
+        <strong>${t("profile.onlineStatus")}</strong>
+        <span class="status-pill ok">${t("profile.onlineConnectedShort")}</span>
+      </div>
+      <div class="settings-row">
+        <strong>${t("profile.roles")}</strong>
+        <span class="role-list">${onlineRoleBadges(online, t, escapeHtml)}</span>
+      </div>
+      <div class="settings-row">
+        <strong>${t("profile.license")}</strong>
+        <span>${onlineLicenseText(online, t, escapeHtml)}</span>
+      </div>
+      <div class="settings-row">
+        <strong>${t("profile.mobileAccess")}</strong>
+        <span class="status-pill ${mobileAllowed ? "ok" : "danger"}">${mobileAllowed ? t("profile.mobileUnlocked") : t("profile.mobileLocked")}</span>
+      </div>
+      <div class="settings-row">
+        <strong>${t("profile.workedTypes")}</strong>
+        <span>${workedCaseTypesText(online, t, escapeHtml)}</span>
+      </div>
+      <div class="settings-row">
+        <strong>${t("profile.lastSync")}</strong>
+        <small>${escapeHtml(online.last_sync_at || "-")}</small>
+      </div>
+      <div class="button-row">
+        <button class="secondary-button" data-action="profile-new">${icon("user")} ${t("profile.newProfile")}</button>
+        <button class="secondary-button" data-action="profile-online-sync">${icon("refresh")} ${t("profile.onlineSync")}</button>
+        <button class="danger-button" data-action="profile-online-logout">${icon("stop")} ${t("profile.onlineDisconnect")}</button>
+        <button class="danger-button" data-action="profile-logout">${icon("stop")} ${t("profile.logout")}</button>
+      </div>
+      ${profileActivityHtml(profile, t, icon, escapeHtml)}
+    </article>
+  `;
+}
+
+function onlineDisconnectedCard(t, icon) {
+  return `
+    <article class="settings-card">
+      <span class="settings-kicker">${t("profile.onlineAccount")}</span>
+      <h3>${t("profile.onlineDisconnected")}</h3>
+      <div class="settings-row">
+        <strong>${t("profile.onlineStatus")}</strong>
+        <span class="status-pill warn">${t("profile.onlineDisconnectedShort")}</span>
+      </div>
+      <div class="button-row">
+        <button class="primary-button" data-action="profile-online-start">${icon("globe")} ${t("profile.onlineConnect")}</button>
+      </div>
+    </article>
+  `;
+}
+
+function profilePreferenceRows(profile, state, t, escapeHtml) {
+  return `
+    <div class="settings-row">
+      <strong>${t("settings.language")}</strong>
+      <span>${profile?.language === "en" ? "English" : "Türkçe"}</span>
+    </div>
+    <div class="settings-row">
+      <strong>${t("profile.theme")}</strong>
+      <span>${profile?.theme === "light" ? t("profile.themeLight") : t("profile.themeDark")}</span>
+    </div>
+    <div class="settings-row">
+      <strong>${t("case.location")}</strong>
+      <small>${escapeHtml(state.caseBaseDir || "~/Amele/Kullanicilar/.../Vakalar")}</small>
+    </div>
   `;
 }
 
