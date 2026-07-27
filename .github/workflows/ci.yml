@@ -180,6 +180,20 @@ jobs:
         shell: pwsh
         run: ./scripts/build-windows-msi.ps1
 
+      - name: Verify MSI has no loose UI sources
+        shell: pwsh
+        run: |
+          $UiStageDir = Join-Path $PWD "dist\windows-stage\share\amele\ui"
+          if (Test-Path $UiStageDir) {
+            Get-ChildItem $UiStageDir -Recurse | Write-Host
+            throw "Windows MSI stage contains loose UI source files: $UiStageDir"
+          }
+
+          $HarvestedWxs = Join-Path $PWD "dist\wix\harvested.wxs"
+          if (Select-String -Path $HarvestedWxs -Pattern "share\amele\ui" -SimpleMatch -Quiet) {
+            throw "Windows MSI harvest unexpectedly references share\amele\ui"
+          }
+
       - name: Name Windows asset from commit
         env:
           ASSET_SUFFIX: ${{ needs.metadata.outputs.asset_suffix }}

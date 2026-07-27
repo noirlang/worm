@@ -6,7 +6,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 
+#[cfg(debug_assertions)]
 const DEV_UI_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/ui");
+
+mod embedded_ui_assets {
+    include!(concat!(env!("OUT_DIR"), "/ui_assets.rs"));
+}
 
 /// HTTP cevabının durum kodu, içerik tipi ve gövdesini taşır.
 #[derive(Clone, Debug)]
@@ -99,7 +104,7 @@ fn start_background() -> Result<String, String> {
             std::env::consts::ARCH,
             std::process::id(),
             std::env::current_exe().unwrap_or_default(),
-            ui_root(),
+            ui_root().unwrap_or_else(|| PathBuf::from("<embedded>")),
             addr.port(),
         ),
     );
@@ -154,11 +159,18 @@ fn start_background() -> Result<String, String> {
 
 /// UI dosyalarının paket içinde veya geliştirme klasöründe bulunduğunu doğrular.
 fn validate_ui_assets() -> Result<(), String> {
-    let root = ui_root();
-    if root.join("index.html").is_file() {
+    if embedded_ui_asset("index.html").is_some() {
+        return Ok(());
+    }
+
+    if let Some(root) = ui_root()
+        && root.join("index.html").is_file()
+    {
         Ok(())
     } else {
-        Err(crate::diagnostics::ui_assets_missing(&root))
+        Err(crate::diagnostics::ui_assets_missing(
+            &ui_root().unwrap_or_else(|| PathBuf::from("<embedded>")),
+        ))
     }
 }
 
@@ -361,26 +373,49 @@ fn write_response(mut stream: TcpStream, response: Response) -> Result<(), Strin
         .map_err(|err| err.to_string())
 }
 
-/// UI dosyalarının paketlenmiş veya geliştirme ortamındaki kök klasörünü bulur.
-pub fn ui_root() -> PathBuf {
+/// UI dosyalarının harici geliştirme klasörünü bulur.
+pub fn ui_root() -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
     if let Some(path) = std::env::var_os("AMELE_UI_ROOT") {
         let path = PathBuf::from(path);
         if path.join("index.html").exists() {
-            return path;
+            return Some(path);
         }
     }
 
+    #[cfg(debug_assertions)]
     if let Ok(exe) = std::env::current_exe()
         && let Some(bin_dir) = exe.parent()
         && let Some(prefix) = bin_dir.parent()
     {
         let packaged = prefix.join("share").join("amele").join("ui");
         if packaged.join("index.html").exists() {
-            return packaged;
+            return Some(packaged);
         }
     }
 
-    PathBuf::from(DEV_UI_ROOT)
+    #[cfg(debug_assertions)]
+    {
+        let dev_root = PathBuf::from(DEV_UI_ROOT);
+        if dev_root.join("index.html").exists() {
+            return Some(dev_root);
+        }
+    }
+
+    None
+}
+
+/// UI asset yolunu embedded binary kaynaklarından döndürür.
+pub fn embedded_ui_asset(relative: &str) -> Option<&'static [u8]> {
+    let mut path = relative.replace('\\', "/");
+    if path.is_empty() || path == "/" {
+        path = "index.html".to_string();
+    }
+    if path.ends_with('/') {
+        path.push_str("index.html");
+    }
+    let key = format!("/{}", path.trim_start_matches('/'));
+    embedded_ui_assets::get(&key)
 }
 
 /// Dosya uzantısına göre HTTP Content-Type döndürür.
@@ -437,6 +472,19 @@ fn hex_value(byte: u8) -> Option<u8> {
         b'a'..=b'f' => Some(byte - b'a' + 10),
         b'A'..=b'F' => Some(byte - b'A' + 10),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::embedded_ui_asset;
+
+    #[test]
+    fn embeds_required_ui_entrypoints() {
+        assert!(embedded_ui_asset("index.html").is_some());
+        assert!(embedded_ui_asset("app.js").is_some());
+        assert!(embedded_ui_asset("styles.css").is_some());
+        assert!(embedded_ui_asset("missing.js").is_none());
     }
 }
 // o gözlerin geçmeyen hisleri var

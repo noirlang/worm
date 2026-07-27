@@ -32,22 +32,34 @@ fn serve_static(path: &str, head_only: bool) -> Response {
         return server::json_error(403, "path traversal rejected");
     }
 
-    let mut file_path = server::ui_root();
-    file_path.push(relative);
-    if file_path.is_dir() {
-        file_path.push("index.html");
+    if let Some(root) = server::ui_root() {
+        let mut file_path = root;
+        file_path.push(relative);
+        if file_path.is_dir() {
+            file_path.push("index.html");
+        }
+
+        if let Ok(body) = fs::read(&file_path) {
+            return Response {
+                status: 200,
+                content_type: server::mime_for(&file_path).to_string(),
+                body: if head_only { Vec::new() } else { body },
+            };
+        }
     }
 
-    match fs::read(&file_path) {
-        Ok(body) => Response {
+    if let Some(body) = server::embedded_ui_asset(relative) {
+        let content_type = server::mime_for(std::path::Path::new(relative)).to_string();
+        return Response {
             status: 200,
-            content_type: server::mime_for(&file_path).to_string(),
-            body: if head_only { Vec::new() } else { body },
-        },
-        Err(_) => Response {
-            status: 404,
-            content_type: "text/html; charset=utf-8".to_string(),
-            body: b"Not found".to_vec(),
-        },
+            content_type,
+            body: if head_only { Vec::new() } else { body.to_vec() },
+        };
+    }
+
+    Response {
+        status: 404,
+        content_type: "text/html; charset=utf-8".to_string(),
+        body: b"Not found".to_vec(),
     }
 }

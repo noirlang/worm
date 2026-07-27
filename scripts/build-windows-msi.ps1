@@ -61,14 +61,12 @@ if (-not $VersionMatch.Success) {
 }
 $Version = $VersionMatch.Groups[1].Value
 
-if (-not (Test-Path $BinaryPath)) {
-    Push-Location $RootDir
-    try {
-        Invoke-CheckedCommand cargo build --release --locked
-    }
-    finally {
-        Pop-Location
-    }
+Push-Location $RootDir
+try {
+    Invoke-CheckedCommand cargo build --release --locked
+}
+finally {
+    Pop-Location
 }
 
 if (-not (Test-Path $IconPath)) {
@@ -81,10 +79,14 @@ New-Item (Join-Path $StageDir "share\amele") -ItemType Directory -Force | Out-Nu
 New-Item $WixDir -ItemType Directory -Force | Out-Null
 
 Copy-Item $BinaryPath (Join-Path $StageDir "bin\amele.exe")
-Copy-Item (Join-Path $RootDir "ui") (Join-Path $StageDir "share\amele\ui") -Recurse
 Copy-Item (Join-Path $RootDir "tools") (Join-Path $StageDir "share\amele\tools") -Recurse
 New-Item (Join-Path $StageDir "share\amele\vendor") -ItemType Directory -Force | Out-Null
 Copy-Item (Join-Path $RootDir "vendor\volatility3") (Join-Path $StageDir "share\amele\vendor\volatility3") -Recurse
+
+$UiStageDir = Join-Path $StageDir "share\amele\ui"
+if (Test-Path $UiStageDir) {
+    throw "Windows MSI stage must not contain loose UI source files: $UiStageDir"
+}
 
 $Heat = Find-WixTool "heat"
 $Candle = Find-WixTool "candle"
