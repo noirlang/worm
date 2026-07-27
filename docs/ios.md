@@ -50,7 +50,7 @@ Timestamp,Status,Domain,RelativePath,FileID,OutputPath,SizeBytes,MD5,SHA1,SHA256
 
 - `Copied`: Dosya kopyalandı ve seçili hashler hesaplandı.
 - `Directory`: Manifest girdisi klasör olarak oluşturuldu.
-- `Symlink`: Symlink girdisi kayda alındı.
+- `Symlink`: Symlink girdisi işlendi; hedef bilgisi `*.symlink.txt` dosyasına yazılır. Linux üzerinde hedef güvenli biçimde vaka çıktı ağacına eşlenebiliyorsa native symlink de oluşturulur.
 - `Missing`: Backup içindeki hashlenmiş kaynak dosya bulunamadı.
 - `Error`: Girdi işlenirken hata oluştu.
 
@@ -121,7 +121,7 @@ Timestamp,Status,Domain,RelativePath,FileID,OutputPath,SizeBytes,MD5,SHA1,SHA256
 
 - `Copied`: File copied and selected hashes calculated.
 - `Directory`: Directory entry created.
-- `Symlink`: Symlink entry recorded.
+- `Symlink`: Symlink entry processed; target metadata is written to a `*.symlink.txt` file. On Linux, Amele also creates a native symlink when the target can be safely mapped inside the case output tree.
 - `Missing`: Hashed source file was missing from the backup.
 - `Error`: Entry processing failed.
 

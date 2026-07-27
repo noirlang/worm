@@ -8,7 +8,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
@@ -75,6 +75,7 @@ struct BackupEntry {
     domain: String,
     relative_path: String,
     flags: i64,
+    metadata: Option<Vec<u8>>,
 }
 
 /// Backup klasörünün temel geçerliliğini ve cihaz profilini okur.
@@ -215,7 +216,7 @@ where
 
     let mut statement = connection
         .prepare(
-            "SELECT fileID, domain, relativePath, flags FROM Files ORDER BY domain, relativePath",
+            "SELECT fileID, domain, relativePath, flags, file FROM Files ORDER BY domain, relativePath",
         )
         .map_err(|err| {
             AmeleError::new(
@@ -230,6 +231,7 @@ where
                 domain: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
                 relative_path: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
                 flags: row.get::<_, Option<i64>>(3)?.unwrap_or(1),
+                metadata: row.get::<_, Option<Vec<u8>>>(4)?,
             })
         })
         .map_err(|err| {
@@ -339,7 +341,25 @@ fn process_entry(
 
     if entry.flags == 4 {
         counters.symlinks += 1;
-        let _ = append_csv_log(log_path, "Symlink", entry, None, None, None);
+        let target = entry.metadata.as_deref().and_then(extract_symlink_target);
+        match materialize_symlink(output_dir, &destination, entry, target.as_deref()) {
+            Ok(path) => {
+                let _ = append_csv_log(log_path, "Symlink", entry, Some(&path), None, None);
+            }
+            Err(err) => {
+                runtime_log(
+                    LogLevel::Warn,
+                    "ios",
+                    format!(
+                        "iOS symlink kaydi yazilamadi: {} | {}",
+                        destination.display(),
+                        err
+                    ),
+                );
+                counters.errors += 1;
+                let _ = append_csv_log(log_path, "Error", entry, Some(&destination), None, None);
+            }
+        }
         return;
     }
 
@@ -450,6 +470,170 @@ fn stream_copy(source: &Path, destination: &Path) -> AmeleResult<u64> {
         )
     })?;
     Ok(total)
+}
+
+fn materialize_symlink(
+    output_root: &Path,
+    destination: &Path,
+    entry: &BackupEntry,
+    target: Option<&str>,
+) -> AmeleResult<PathBuf> {
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            AmeleError::io(
+                HataKodu::DosyaYazma,
+                format!("Symlink hedef klasoru olusturulamadi: {}", parent.display()),
+                err,
+            )
+        })?;
+    }
+
+    let link_created = match target {
+        Some(target) => create_safe_symlink(output_root, destination, target).unwrap_or(false),
+        None => false,
+    };
+    let marker_path = symlink_marker_path(destination);
+    let marker = format!(
+        "Amele iOS symlink record\nDomain: {}\nRelativePath: {}\nFileID: {}\nTarget: {}\nNativeSymlinkCreated: {}\n",
+        entry.domain,
+        entry.relative_path,
+        format_file_id(&entry.file_id),
+        target.unwrap_or("(metadata target not found)"),
+        link_created
+    );
+    fs::write(&marker_path, marker).map_err(|err| {
+        AmeleError::io(
+            HataKodu::DosyaYazma,
+            format!("Symlink metadata yazilamadi: {}", marker_path.display()),
+            err,
+        )
+    })?;
+    if link_created {
+        Ok(destination.to_path_buf())
+    } else {
+        Ok(marker_path)
+    }
+}
+
+fn symlink_marker_path(destination: &Path) -> PathBuf {
+    let file_name = destination
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("ios_symlink");
+    destination.with_file_name(format!("{file_name}.symlink.txt"))
+}
+
+#[cfg(unix)]
+fn create_safe_symlink(
+    output_root: &Path,
+    destination: &Path,
+    target: &str,
+) -> std::io::Result<bool> {
+    let Some(mapped_target) = map_symlink_target(output_root, target) else {
+        return Ok(false);
+    };
+    if fs::symlink_metadata(destination).is_ok() {
+        return Ok(false);
+    }
+    std::os::unix::fs::symlink(mapped_target, destination)?;
+    Ok(true)
+}
+
+#[cfg(not(unix))]
+fn create_safe_symlink(
+    _output_root: &Path,
+    _destination: &Path,
+    _target: &str,
+) -> std::io::Result<bool> {
+    Ok(false)
+}
+
+fn map_symlink_target(output_root: &Path, target: &str) -> Option<PathBuf> {
+    let target = target.trim();
+    if target.is_empty() || target.chars().any(|ch| ch == '\0' || ch.is_control()) {
+        return None;
+    }
+    let normalized = target.replace('\\', "/");
+    let relative = normalized.trim_start_matches('/');
+    let mapped = if relative.starts_with("private/var/") {
+        relative.to_string()
+    } else if relative.starts_with("var/") {
+        format!("private/{relative}")
+    } else {
+        return None;
+    };
+
+    let mut path = output_root.to_path_buf();
+    for part in mapped.split('/') {
+        push_safe_segment(&mut path, part);
+    }
+    Some(path)
+}
+
+fn extract_symlink_target(metadata: &[u8]) -> Option<String> {
+    let value = PlistValue::from_reader(Cursor::new(metadata)).ok()?;
+    find_symlink_target(&value)
+}
+
+fn find_symlink_target(value: &PlistValue) -> Option<String> {
+    if let Some(data) = keyed_archive_root(value)
+        && let Some(target) = find_symlink_target_in_value(data, true)
+    {
+        return Some(target);
+    }
+    find_symlink_target_in_value(value, true)
+}
+
+fn keyed_archive_root(value: &PlistValue) -> Option<&PlistValue> {
+    let dict = value.as_dictionary()?;
+    let objects = dict.get("$objects")?.as_array()?;
+    let top = dict.get("$top")?.as_dictionary()?;
+    let root_index = uid_index(top.get("root")?)?;
+    objects.get(root_index)
+}
+
+fn uid_index(value: &PlistValue) -> Option<usize> {
+    value.as_uid()?.get().try_into().ok()
+}
+
+fn find_symlink_target_in_value(value: &PlistValue, allow_key_match: bool) -> Option<String> {
+    match value {
+        PlistValue::Dictionary(dict) => {
+            for (key, child) in dict {
+                if allow_key_match
+                    && is_symlink_target_key(key)
+                    && let Some(target) = plist_value_string(child)
+                {
+                    return Some(target);
+                }
+            }
+            for child in dict.values() {
+                if let Some(target) = find_symlink_target_in_value(child, false) {
+                    return Some(target);
+                }
+            }
+            None
+        }
+        PlistValue::Array(items) => items
+            .iter()
+            .find_map(|child| find_symlink_target_in_value(child, allow_key_match)),
+        _ => None,
+    }
+}
+
+fn is_symlink_target_key(key: &str) -> bool {
+    matches!(
+        key,
+        "Target" | "LinkTarget" | "SymlinkTarget" | "SymbolicLinkTarget"
+    )
+}
+
+fn plist_value_string(value: &PlistValue) -> Option<String> {
+    value
+        .as_string()
+        .map(str::to_string)
+        .filter(|target| !target.trim().is_empty())
 }
 
 fn query_total_entries(connection: &Connection) -> AmeleResult<u64> {
@@ -772,6 +956,7 @@ fn ios_model_name(product_type: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use plist::Uid;
 
     #[test]
     fn maps_known_ios_domains() {
@@ -793,5 +978,50 @@ mod tests {
         assert!(!rendered.contains(".."));
         assert!(!rendered.contains('|'));
         assert!(!rendered.contains('?'));
+    }
+
+    #[test]
+    fn extracts_symlink_target_from_keyed_archive_metadata() {
+        let mut file_record = plist::Dictionary::new();
+        file_record.insert(
+            "Target".to_string(),
+            PlistValue::String("/var/mobile/Library/link-target".to_string()),
+        );
+
+        let mut top = plist::Dictionary::new();
+        top.insert("root".to_string(), PlistValue::Uid(Uid::new(1)));
+
+        let mut archive = plist::Dictionary::new();
+        archive.insert(
+            "$objects".to_string(),
+            PlistValue::Array(vec![
+                PlistValue::String("$null".to_string()),
+                PlistValue::Dictionary(file_record),
+            ]),
+        );
+        archive.insert("$top".to_string(), PlistValue::Dictionary(top));
+
+        let mut data = Cursor::new(Vec::new());
+        PlistValue::Dictionary(archive)
+            .to_writer_binary(&mut data)
+            .unwrap();
+
+        assert_eq!(
+            extract_symlink_target(&data.into_inner()).as_deref(),
+            Some("/var/mobile/Library/link-target")
+        );
+    }
+
+    #[test]
+    fn maps_ios_absolute_symlink_target_inside_output_root() {
+        let root = PathBuf::from("/case/ios/run");
+        let target = map_symlink_target(&root, "/var/mobile/Library/Preferences").unwrap();
+        assert!(target.ends_with("private/var/mobile/Library/Preferences"));
+    }
+
+    #[test]
+    fn creates_portable_symlink_marker_name() {
+        let marker = symlink_marker_path(&PathBuf::from("/case/ios/private/var/mobile/link"));
+        assert!(marker.ends_with("link.symlink.txt"));
     }
 }
