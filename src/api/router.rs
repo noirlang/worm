@@ -53,6 +53,10 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
         ("POST", "/api/profiles/create") => profile::profile_create_endpoint(body),
         ("POST", "/api/profiles/select") => profile::profile_select_endpoint(body),
         ("POST", "/api/profiles/logout") => profile::profile_logout_endpoint(),
+        ("POST", "/api/profiles/online-login") => profile::profile_online_login_endpoint(body),
+        ("POST", "/api/profiles/online-sync") => profile::profile_online_sync_endpoint(),
+        ("POST", "/api/profiles/online-logout") => profile::profile_online_logout_endpoint(),
+        ("GET", "/api/profiles/mobile-access") => profile::profile_mobile_access_endpoint(),
         ("GET", "/api/settings-default") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Debug,
@@ -80,53 +84,65 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
             system::disk_list_endpoint()
         }
         ("GET", "/api/android-adb-status") => {
-            crate::logging::runtime_log(
-                crate::logging::LogLevel::Info,
-                "api:android",
-                "ADB servis durumu sorgulaniyor",
-            );
-            match serde_json::to_value(crate::android::adb_status()) {
-                Ok(value) => json_ok(value),
-                Err(err) => {
-                    crate::logging::runtime_log(
-                        crate::logging::LogLevel::Error,
-                        "api:android",
-                        format!("ADB durum bilgisi donulemedi: {}", err),
-                    );
-                    json_error(500, err.to_string())
+            if let Some(response) = profile::require_mobile_tools_response() {
+                response
+            } else {
+                crate::logging::runtime_log(
+                    crate::logging::LogLevel::Info,
+                    "api:android",
+                    "ADB servis durumu sorgulaniyor",
+                );
+                match serde_json::to_value(crate::android::adb_status()) {
+                    Ok(value) => json_ok(value),
+                    Err(err) => {
+                        crate::logging::runtime_log(
+                            crate::logging::LogLevel::Error,
+                            "api:android",
+                            format!("ADB durum bilgisi donulemedi: {}", err),
+                        );
+                        json_error(500, err.to_string())
+                    }
                 }
             }
         }
         ("POST", "/api/android-adb-install") => {
-            crate::logging::runtime_log(
-                crate::logging::LogLevel::Info,
-                "api:android",
-                "ADB otomatik kurulumu baslatiliyor",
-            );
-            match crate::android::install_adb() {
-                Ok(result) => match serde_json::to_value(result) {
-                    Ok(value) => json_ok(value),
-                    Err(err) => json_error(500, err.to_string()),
-                },
-                Err(err) => json_error(500, crate::android::explain_android_error(err)),
+            if let Some(response) = profile::require_mobile_tools_response() {
+                response
+            } else {
+                crate::logging::runtime_log(
+                    crate::logging::LogLevel::Info,
+                    "api:android",
+                    "ADB otomatik kurulumu baslatiliyor",
+                );
+                match crate::android::install_adb() {
+                    Ok(result) => match serde_json::to_value(result) {
+                        Ok(value) => json_ok(value),
+                        Err(err) => json_error(500, err.to_string()),
+                    },
+                    Err(err) => json_error(500, crate::android::explain_android_error(err)),
+                }
             }
         }
         ("GET", "/api/android-devices") => {
-            crate::logging::runtime_log(
-                crate::logging::LogLevel::Info,
-                "api:android",
-                "Bagli Android cihaz listesi talep edildi",
-            );
-            match crate::android::list_devices() {
-                Ok(devices) => json_ok(serde_json::json!({ "devices": devices })),
-                Err(err) => {
-                    let err_msg = crate::android::explain_android_error(err);
-                    crate::logging::runtime_log(
-                        crate::logging::LogLevel::Error,
-                        "api:android",
-                        format!("Android cihazlari listelenemedi: {}", err_msg),
-                    );
-                    json_error(500, err_msg)
+            if let Some(response) = profile::require_mobile_tools_response() {
+                response
+            } else {
+                crate::logging::runtime_log(
+                    crate::logging::LogLevel::Info,
+                    "api:android",
+                    "Bagli Android cihaz listesi talep edildi",
+                );
+                match crate::android::list_devices() {
+                    Ok(devices) => json_ok(serde_json::json!({ "devices": devices })),
+                    Err(err) => {
+                        let err_msg = crate::android::explain_android_error(err);
+                        crate::logging::runtime_log(
+                            crate::logging::LogLevel::Error,
+                            "api:android",
+                            format!("Android cihazlari listelenemedi: {}", err_msg),
+                        );
+                        json_error(500, err_msg)
+                    }
                 }
             }
         }

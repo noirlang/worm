@@ -15,6 +15,10 @@ use std::thread;
 
 /// Seçilen vakanın Android çıktılarından analiz özeti üretir.
 pub fn android_case_analysis_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct AndroidAnalysisRequest {
         case_name: Option<String>,
@@ -34,6 +38,10 @@ pub fn android_case_analysis_endpoint(body: &[u8]) -> Response {
 
 /// Bağlı Android cihazın model, API, root ve şifreleme profilini döndürür.
 pub fn android_device_profile_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct AndroidProfileRequest {
         serial: String,
@@ -64,6 +72,10 @@ pub fn android_device_profile_endpoint(body: &[u8]) -> Response {
 
 /// Android profil/mantıksal edinim işini arka planda başlatır.
 pub fn android_profile_acquisition_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct AndroidProfileAcquisitionRequest {
         serial: String,
@@ -84,6 +96,12 @@ pub fn android_profile_acquisition_endpoint(body: &[u8]) -> Response {
         .as_deref()
         .map(android::AndroidAcquisitionProfile::from_id)
         .unwrap_or(android::AndroidAcquisitionProfile::FullLogical);
+    let _ = crate::profile::record_active_profile_activity(
+        "Android",
+        "Profil edinimi",
+        request.case_name.as_deref(),
+        Some(&serial),
+    );
 
     let (job_id, control) = create_acquisition_job("Android profil edinimi baslatildi");
     let thread_job_id = job_id.clone();
@@ -240,6 +258,10 @@ fn run_android_profile_acquisition_job(
 
 /// Eski mantıksal imaj endpoint'ini arka plan işi olarak çalıştırır.
 pub fn android_logical_image_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct AndroidLogicalRequest {
         serial: String,
@@ -254,6 +276,12 @@ pub fn android_logical_image_endpoint(body: &[u8]) -> Response {
     if serial.is_empty() {
         return json_error(400, "serial is required");
     }
+    let _ = crate::profile::record_active_profile_activity(
+        "Android",
+        "Mantıksal imaj",
+        request.case_name.as_deref(),
+        Some(&serial),
+    );
 
     let (job_id, control) = create_acquisition_job("Android mantiksal imaj alma baslatildi");
     let thread_job_id = job_id.clone();
@@ -385,6 +413,10 @@ fn run_android_logical_job(
 
 /// Android dosya sistemi edinim işini başlatır.
 pub fn android_filesystem_image_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct AndroidFilesystemRequest {
         serial: String,
@@ -400,6 +432,12 @@ pub fn android_filesystem_image_endpoint(body: &[u8]) -> Response {
     if serial.is_empty() {
         return json_error(400, "serial is required");
     }
+    let _ = crate::profile::record_active_profile_activity(
+        "Android",
+        "Dosya sistemi imajı",
+        request.case_name.as_deref(),
+        Some(&serial),
+    );
 
     let (job_id, control) = create_acquisition_job("Android dosya sistemi imaj alma baslatildi");
     let thread_job_id = job_id.clone();
@@ -526,6 +564,10 @@ fn run_android_filesystem_job(
 
 /// Android uçucu veri/RAM odaklı edinim işini başlatır.
 pub fn android_ram_image_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct AndroidRamRequest {
         serial: String,
@@ -551,6 +593,12 @@ pub fn android_ram_image_endpoint(body: &[u8]) -> Response {
         .as_deref()
         .map(android::AndroidRamMode::from_id)
         .unwrap_or(android::AndroidRamMode::VolatileData);
+    let _ = crate::profile::record_active_profile_activity(
+        "Android",
+        "Uçucu veri",
+        request.case_name.as_deref(),
+        Some(&serial),
+    );
     thread::spawn(move || {
         run_android_ram_job(
             thread_job_id,
@@ -743,6 +791,10 @@ mod tests {
 ///
 /// Senkron ve hızlı çalışır (~5-10s). ABI, root, eBPF/BTF, SoC uyarısı döner.
 pub fn android_lemon_preflight_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct LemonPreflightRequest {
         serial: String,
@@ -767,6 +819,10 @@ pub fn android_lemon_preflight_endpoint(body: &[u8]) -> Response {
 
 /// Belirtilen host:port'a `adb connect` komutuyla bağlanır.
 pub fn android_remote_connect_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct RemoteConnectRequest {
         host: String,
@@ -786,6 +842,12 @@ pub fn android_remote_connect_endpoint(body: &[u8]) -> Response {
     }
 
     let port = request.port.unwrap_or(5555);
+    let _ = crate::profile::record_active_profile_activity(
+        "Android",
+        "Uzak bağlantı",
+        None,
+        Some(&format!("{host}:{port}")),
+    );
     let kind = match request.kind.as_deref().unwrap_or("tcp_adb") {
         "mesh_relay" => android::RemoteEndpointKind::MeshRelay,
         _ => android::RemoteEndpointKind::TcpAdb,
@@ -804,6 +866,10 @@ pub fn android_remote_connect_endpoint(body: &[u8]) -> Response {
 
 /// Belirtilen serial'ı ADB cihaz listesinden çıkarır (`adb disconnect`).
 pub fn android_remote_disconnect_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct RemoteDisconnectRequest {
         serial: String,

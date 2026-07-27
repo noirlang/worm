@@ -26,6 +26,7 @@ The app runs as a real desktop window on Linux and Windows.
 - **Remote memory acquisition:** start, pause, resume, stop, track, and download RAM dumps from agents.
 - **Android tools:** check ADB, list devices, collect logical data, collect filesystem data, capture volatile data, and analyze Android case outputs.
 - **iOS tools:** normalize unencrypted or already decrypted iTunes/Finder backups into a browsable Backup2FS-style file system, with per-file MD5/SHA1/SHA256 CSV logging.
+- **Online profiles:** connect an `amele.noirlang.tr` account, display synced roles such as BDFL or platform maintainer, and require verified membership for Android/iOS tools.
 - **Case management:** store acquisitions, notes, hashes, Android outputs, iOS outputs, reports, and `case_manifest.json` integrity inventories under selected cases.
 - **Hashing and verification:** calculate MD5, SHA1, SHA256, and SHA512; generate sidecar hashes for acquired evidence.
 - **Image viewing:** mount supported images read-only for inspection.
@@ -128,6 +129,12 @@ Open the browser-backed debug UI:
 cargo run -- ui-browser
 ```
 
+## Online Profile Security
+
+Android and iOS tools are locked until a local profile is connected to an online `amele.noirlang.tr` account. The desktop app talks to the website API; MongoDB connection strings and database passwords must stay on the website/backend side and are not embedded in the app.
+
+The backend checks the saved Bearer token against `/api/auth/session` and the current user profile before running mobile endpoints, so editing the local profile JSON is not enough to unlock mobile tools. The local token is stored under the user's Amele profile folder and is not returned by `/api/profiles`.
+
 ## Agents
 
 Run the Linux agent on the target machine:
@@ -190,6 +197,7 @@ Uygulama Linux ve Windows üzerinde gerçek bir masaüstü penceresi olarak çal
 - **Uzak bellek (RAM) edinimi:** Ajanlar üzerinden RAM edinimini başlatın, duraklatın, sürdürün, durdurun, izleyin ve RAM dökümlerini indirin.
 - **Android araçları:** ADB durumunu kontrol edin, cihazları listeleyin, mantıksal veri toplayın, dosya sistemi verisi toplayın, uçucu (volatile) verileri alın ve Android vaka çıktılarını analiz edin.
 - **iOS araçları:** Şifresiz veya önceden decrypt edilmiş iTunes/Finder backup klasörlerini Backup2FS düzeninde gezilebilir dosya sistemine dönüştürün; her dosya için MD5/SHA1/SHA256 CSV log üretin.
+- **Online profiller:** `amele.noirlang.tr` hesabını bağlayın, BDFL veya platform maintainer gibi rolleri profilde görün ve Android/iOS araçlarını doğrulanmış üyelikle kullanın.
 - **Vaka yönetimi:** Edinimleri, notları, hash değerlerini, Android/iOS çıktılarını, raporları ve `case_manifest.json` bütünlük envanterlerini seçilen vakalar altında saklayın.
 - **Hash hesaplama ve doğrulama:** MD5, SHA1, SHA256 ve SHA512 hesaplayın; elde edilen deliller için yan dosya (sidecar) hash dosyaları oluşturun.
 - **İmaj görüntüleme:** Desteklenen imajları inceleme amacıyla salt okunur (read-only) olarak bağlayın (mount).
@@ -291,6 +299,12 @@ Tarayıcı tabanlı hata ayıklama arayüzünü (debug UI) açın:
 ```bash
 cargo run -- ui-browser
 ```
+
+## Online Profil Güvenliği
+
+Android ve iOS araçları, yerel profil bir `amele.noirlang.tr` hesabına bağlanmadan kilitli kalır. Masaüstü uygulaması web sitesi API'siyle konuşur; MongoDB connection string ve veritabanı parolaları uygulamaya gömülmez, website/backend tarafında kalır.
+
+Mobil endpointler çalışmadan önce backend kayıtlı Bearer token'ı `/api/auth/session` ve güncel kullanıcı profiliyle doğrular. Bu yüzden yerel profil JSON'unu elle düzenlemek Android/iOS araçlarını açmak için yeterli değildir. Yerel token kullanıcının Amele profil klasöründe tutulur ve `/api/profiles` cevabında döndürülmez.
 
 ## Ajanlar (Agents)
 

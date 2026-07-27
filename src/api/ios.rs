@@ -16,6 +16,10 @@ use std::thread;
 
 /// iOS backup klasörünü hızlıca doğrular ve cihaz/backup profilini döndürür.
 pub fn ios_backup_profile_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     #[derive(Deserialize)]
     struct IosProfileRequest {
         backup_path: String,
@@ -38,6 +42,10 @@ pub fn ios_backup_profile_endpoint(body: &[u8]) -> Response {
 
 /// iOS backup normalizasyon işini arka planda başlatır.
 pub fn ios_backup_normalize_endpoint(body: &[u8]) -> Response {
+    if let Some(response) = crate::api::profile::require_mobile_tools_response() {
+        return response;
+    }
+
     let request: IosNormalizeRequest = match serde_json::from_slice(body) {
         Ok(request) => request,
         Err(err) => return json_error(400, err.to_string()),
@@ -45,6 +53,12 @@ pub fn ios_backup_normalize_endpoint(body: &[u8]) -> Response {
     if request.backup_path.trim().is_empty() {
         return json_error(400, "backup_path is required");
     }
+    let _ = crate::profile::record_active_profile_activity(
+        "iOS",
+        "Backup2FS normalizasyonu",
+        request.case_name.as_deref(),
+        Some(request.backup_path.trim()),
+    );
 
     let (job_id, control) = create_acquisition_job("iOS backup normalizasyonu baslatildi");
     let thread_job_id = job_id.clone();

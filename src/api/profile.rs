@@ -21,6 +21,16 @@ struct SelectProfileRequest {
     open_directly: Option<bool>,
 }
 
+#[derive(Deserialize)]
+/// Online profil bağlama isteğinin gövdesidir.
+struct OnlineProfileLoginRequest {
+    identifier: String,
+    password: String,
+    language: Option<String>,
+    theme: Option<String>,
+    open_directly: Option<bool>,
+}
+
 /// Profil listesini ve açılış kararını döndürür.
 pub fn profiles_get_endpoint() -> Response {
     match crate::profile::bootstrap_profiles() {
@@ -72,6 +82,79 @@ pub fn profile_select_endpoint(body: &[u8]) -> Response {
             "case_base_dir": crate::api::default_case_base_dir(),
         })),
         Err(err) => json_error(404, err.to_string()),
+    }
+}
+
+/// Online site hesabını yerel profile bağlar ve aktif profili günceller.
+pub fn profile_online_login_endpoint(body: &[u8]) -> Response {
+    let request: OnlineProfileLoginRequest = match serde_json::from_slice(body) {
+        Ok(request) => request,
+        Err(err) => return json_error(400, err.to_string()),
+    };
+
+    match crate::profile::link_online_profile(
+        &request.identifier,
+        &request.password,
+        request.language.as_deref().unwrap_or("tr"),
+        request.theme.as_deref().unwrap_or("dark"),
+        request.open_directly.unwrap_or(false),
+    ) {
+        Ok(profile) => json_ok(json!({
+            "profile": profile,
+            "access": crate::profile::mobile_tools_access(),
+            "settings_path": crate::settings::default_settings_path(),
+            "case_base_dir": crate::api::default_case_base_dir(),
+        })),
+        Err(err) => json_error(401, err.to_string()),
+    }
+}
+
+/// Aktif online profil bilgilerini site API'sinden yeniler.
+pub fn profile_online_sync_endpoint() -> Response {
+    match crate::profile::sync_active_online_profile() {
+        Ok(profile) => json_ok(json!({
+            "profile": profile,
+            "access": crate::profile::mobile_tools_access(),
+        })),
+        Err(err) => json_error(400, err.to_string()),
+    }
+}
+
+/// Aktif profilden online hesap bağlantısını kaldırır.
+pub fn profile_online_logout_endpoint() -> Response {
+    match crate::profile::disconnect_active_online_profile() {
+        Ok(profile) => json_ok(json!({
+            "profile": profile,
+            "access": crate::profile::mobile_tools_access(),
+        })),
+        Err(err) => json_error(500, err.to_string()),
+    }
+}
+
+/// Android/iOS araçları için online üyelik durumunu döndürür.
+pub fn profile_mobile_access_endpoint() -> Response {
+    match crate::profile::require_mobile_tools_access() {
+        Ok(()) => json_ok(json!({
+            "access": {
+                "allowed": true,
+                "profile": crate::profile::active_profile(),
+            }
+        })),
+        Err(err) => json_ok(json!({
+            "access": {
+                "allowed": false,
+                "reason": err.to_string(),
+                "profile": crate::profile::active_profile(),
+            }
+        })),
+    }
+}
+
+/// Mobil araç API'leri için üyelik kilidini uygular.
+pub fn require_mobile_tools_response() -> Option<Response> {
+    match crate::profile::require_mobile_tools_access() {
+        Ok(()) => None,
+        Err(err) => Some(json_error(403, err.to_string())),
     }
 }
 

@@ -16,6 +16,7 @@ sha1 = "0.11"
 sha2 = "0.11"
 regex = "1"
 tar = "0.4"
+ureq = { version = "2.12", default-features = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
