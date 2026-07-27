@@ -29,7 +29,7 @@ The app runs as a real desktop window on Linux and Windows.
 - **Case management:** store acquisitions, notes, hashes, Android outputs, iOS outputs, reports, and `case_manifest.json` integrity inventories under selected cases.
 - **Hashing and verification:** calculate MD5, SHA1, SHA256, and SHA512; generate sidecar hashes for acquired evidence.
 - **Image viewing:** mount supported images read-only for inspection.
-- **Reports:** create case reports from collected outputs and notes.
+- **Reports:** create case reports from collected outputs, notes, and iOS backup metadata summaries.
 - **Updates:** check GitHub releases and download platform installers from inside the app.
 
 ## Downloads
@@ -193,7 +193,7 @@ Uygulama Linux ve Windows üzerinde gerçek bir masaüstü penceresi olarak çal
 - **Vaka yönetimi:** Edinimleri, notları, hash değerlerini, Android/iOS çıktılarını, raporları ve `case_manifest.json` bütünlük envanterlerini seçilen vakalar altında saklayın.
 - **Hash hesaplama ve doğrulama:** MD5, SHA1, SHA256 ve SHA512 hesaplayın; elde edilen deliller için yan dosya (sidecar) hash dosyaları oluşturun.
 - **İmaj görüntüleme:** Desteklenen imajları inceleme amacıyla salt okunur (read-only) olarak bağlayın (mount).
-- **Raporlar:** Toplanan çıktılardan ve notlardan vaka raporları oluşturun.
+- **Raporlar:** Toplanan çıktılardan, notlardan ve iOS backup metadata özetlerinden vaka raporları oluşturun.
 - **Güncellemeler:** Uygulama içerisinden GitHub sürümlerini kontrol edin ve platform yükleyicilerini indirin.
 
 ## İndirmeler

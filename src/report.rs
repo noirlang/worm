@@ -9,6 +9,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const REPORT_FILE_LIMIT: usize = 40;
+const REPORT_IOS_MANIFEST_LIMIT: usize = 12;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Rapor oluşturma ekranından gelen temel başlık, kaynak ve hash bilgilerini taşır.
@@ -176,6 +177,7 @@ fn render_txt(info: &ReportInfo, vault: Option<&EvidenceVault>) -> String {
 fn append_vault_summary_txt(out: &mut String, vault: &EvidenceVault) {
     let android_count = count_files_recursive(&vault.android_dir);
     let ios_count = count_files_recursive(&vault.ios_dir);
+    let ios_backups = collect_ios_backup_summaries(&vault.ios_dir, REPORT_IOS_MANIFEST_LIMIT);
     out.push_str("\n----------------------------------------\n");
     out.push_str("VAKA KASASI\n");
     out.push_str(&format!("Vaka: {}\n", vault.case_name));
@@ -208,6 +210,25 @@ fn append_vault_summary_txt(out: &mut String, vault: &EvidenceVault) {
     if ios_count == 0 {
         out.push_str("Kayitli iOS ciktisi yok.\n");
     } else {
+        if !ios_backups.is_empty() {
+            out.push_str("\niOS BACKUP METADATA\n");
+            for backup in &ios_backups {
+                out.push_str(&format!(
+                    "- {} | {} | {} | entries={} copied={} missing={} errors={} bytes={}\n",
+                    backup.output_name,
+                    backup.device_label(),
+                    backup.version_label(),
+                    backup.total_entries,
+                    backup.files_copied,
+                    backup.missing,
+                    backup.errors,
+                    backup.total_bytes
+                ));
+                if let Some(udid) = &backup.unique_device_id {
+                    out.push_str(&format!("  UDID: {udid}\n"));
+                }
+            }
+        }
         for entry in collect_file_entries(&vault.ios_dir, 10) {
             let name = entry["name"].as_str().unwrap_or_default();
             let size = entry["size"].as_u64().unwrap_or_default();
@@ -251,8 +272,130 @@ fn vault_report_json(vault: &EvidenceVault) -> Value {
             "dir": &vault.ios_dir,
             "file_count": count_files_recursive(&vault.ios_dir),
             "files": collect_file_entries(&vault.ios_dir, REPORT_FILE_LIMIT),
+            "backups": collect_ios_backup_summaries(&vault.ios_dir, REPORT_IOS_MANIFEST_LIMIT),
         },
     })
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct IosBackupReportSummary {
+    output_name: String,
+    manifest_path: PathBuf,
+    device_name: Option<String>,
+    model: Option<String>,
+    product_type: Option<String>,
+    ios_version: Option<String>,
+    build_version: Option<String>,
+    serial_number: Option<String>,
+    unique_device_id: Option<String>,
+    encrypted: bool,
+    total_entries: u64,
+    files_copied: u64,
+    directories: u64,
+    symlinks: u64,
+    missing: u64,
+    errors: u64,
+    total_bytes: u64,
+}
+
+impl IosBackupReportSummary {
+    fn device_label(&self) -> String {
+        self.device_name
+            .as_deref()
+            .or(self.model.as_deref())
+            .or(self.product_type.as_deref())
+            .unwrap_or("iOS cihaz")
+            .to_string()
+    }
+
+    fn version_label(&self) -> String {
+        match (&self.ios_version, &self.build_version) {
+            (Some(version), Some(build)) => format!("iOS {version} ({build})"),
+            (Some(version), None) => format!("iOS {version}"),
+            _ => "iOS surumu bilinmiyor".to_string(),
+        }
+    }
+}
+
+fn collect_ios_backup_summaries(dir: &Path, limit: usize) -> Vec<IosBackupReportSummary> {
+    let mut manifest_paths = Vec::new();
+    collect_named_files_recursive(dir, "ios_manifest.json", &mut manifest_paths);
+    manifest_paths.sort();
+    manifest_paths
+        .into_iter()
+        .filter_map(|path| ios_backup_summary_from_manifest(dir, &path))
+        .take(limit)
+        .collect()
+}
+
+fn ios_backup_summary_from_manifest(
+    ios_dir: &Path,
+    manifest_path: &Path,
+) -> Option<IosBackupReportSummary> {
+    let content = fs::read_to_string(manifest_path).ok()?;
+    let value: Value = serde_json::from_str(&content).ok()?;
+    let device = value.get("device").unwrap_or(&Value::Null);
+    let backup = value.get("backup").unwrap_or(&Value::Null);
+    let summary = value.get("summary").unwrap_or(&Value::Null);
+    let parent = manifest_path.parent().unwrap_or(ios_dir);
+    let output_name = parent
+        .strip_prefix(ios_dir)
+        .unwrap_or(parent)
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    Some(IosBackupReportSummary {
+        output_name: if output_name.is_empty() {
+            ".".to_string()
+        } else {
+            output_name
+        },
+        manifest_path: manifest_path.to_path_buf(),
+        device_name: json_string(device, "name"),
+        model: json_string(device, "model"),
+        product_type: json_string(device, "product_type"),
+        ios_version: json_string(device, "ios_version"),
+        build_version: json_string(device, "build_version"),
+        serial_number: json_string(device, "serial_number"),
+        unique_device_id: json_string(device, "unique_device_id"),
+        encrypted: backup
+            .get("encrypted")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        total_entries: json_u64(summary, "total_entries"),
+        files_copied: json_u64(summary, "files_copied"),
+        directories: json_u64(summary, "directories"),
+        symlinks: json_u64(summary, "symlinks"),
+        missing: json_u64(summary, "missing"),
+        errors: json_u64(summary, "errors"),
+        total_bytes: json_u64(summary, "total_bytes"),
+    })
+}
+
+fn collect_named_files_recursive(dir: &Path, file_name: &str, files: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_named_files_recursive(&path, file_name, files);
+        } else if path.file_name().and_then(|name| name.to_str()) == Some(file_name) {
+            files.push(path);
+        }
+    }
+}
+
+fn json_string(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .filter(|item| !item.trim().is_empty())
+}
+
+fn json_u64(value: &Value, key: &str) -> u64 {
+    value.get(key).and_then(Value::as_u64).unwrap_or_default()
 }
 
 /// Bir klasördeki dosya girişlerini rapor limitiyle toplar.
@@ -410,5 +553,56 @@ mod tests {
             parsed["vaka"]["android"]["files"][0]["name"],
             "device_profile.json"
         );
+    }
+
+    #[test]
+    fn json_report_includes_ios_backup_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = EvidenceVault::create(dir.path(), "case_ios").unwrap();
+        let ios_run = vault.ios_dir.join("backup_20260727");
+        std::fs::create_dir_all(&ios_run).unwrap();
+        std::fs::write(
+            ios_run.join("ios_manifest.json"),
+            serde_json::to_string_pretty(&serde_json::json!({
+                "device": {
+                    "name": "Melih iPhone",
+                    "model": "iPhone 15",
+                    "ios_version": "18.5",
+                    "unique_device_id": "UDID-1"
+                },
+                "backup": {
+                    "encrypted": false
+                },
+                "summary": {
+                    "total_entries": 10,
+                    "files_copied": 8,
+                    "directories": 1,
+                    "symlinks": 1,
+                    "missing": 0,
+                    "errors": 0,
+                    "total_bytes": 2048
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let target = vault.reports_dir.join("report.json");
+        let info = ReportInfo {
+            title: "T".to_string(),
+            description: "D".to_string(),
+            creator: "C".to_string(),
+            source: "S".to_string(),
+            hash_sha256: "abc".to_string(),
+            date: "2026-05-15 00:00:00".to_string(),
+        };
+        create_report(&info, ReportFormat::Json, &target, Some(&vault)).unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&target).unwrap()).unwrap();
+
+        let backup = &parsed["vaka"]["ios"]["backups"][0];
+        assert_eq!(backup["device_name"], "Melih iPhone");
+        assert_eq!(backup["ios_version"], "18.5");
+        assert_eq!(backup["files_copied"], 8);
     }
 }
