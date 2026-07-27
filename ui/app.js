@@ -1910,6 +1910,11 @@ async function handleAction(button) {
     return;
   }
 
+  if (action === "create-manifest") {
+    await createCaseManifest();
+    return;
+  }
+
   if (action === "add-note") {
     await addEvidenceNote();
     return;
@@ -2868,6 +2873,29 @@ async function listEvidenceFiles() {
     showToast(t("case.filesListed", { count: String(files.length) }));
   } catch (error) {
     showToast(t("case.listFailed", { message: error.message }), "error");
+  }
+}
+
+async function createCaseManifest() {
+  const caseName = state.pendingCaseName || state.activeCase?.case_name || "";
+  if (!caseName) {
+    showToast(t("case.required"), "error");
+    return;
+  }
+  try {
+    const result = await apiRequest("/api/evidence-manifest", {
+      method: "POST",
+      body: JSON.stringify({ case_name: caseName })
+    });
+    if (state.activeCase) {
+      state.activeCase.manifest_path = result.path || state.activeCase.manifest_path;
+    }
+    await loadEvidenceCases();
+    setStatus("[data-manifest-status]", `${icon("shield")} ${t("case.manifest.ready", { path: escapeHtml(result.path || "") })}`);
+    showToast(t("case.manifest.created", { path: result.path || "" }));
+  } catch (error) {
+    setStatus("[data-manifest-status]", `${icon("info")} ${t("case.manifest.failed", { message: escapeHtml(error.message) })}`);
+    showToast(t("case.manifest.failed", { message: error.message }), "error");
   }
 }
 

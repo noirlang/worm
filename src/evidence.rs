@@ -1,8 +1,10 @@
 //! Vaka klasörü, kanıt kasası, notlar ve çıktı dizini yönetimini sağlar.
 use crate::error::{AmeleError, AmeleResult, HataKodu};
+use crate::hash::{HashAlgorithm, calculate_file_hash};
 use crate::logging::{LogLevel, Logger, runtime_log};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -19,6 +21,7 @@ pub struct EvidenceSummary {
     pub ios_count: usize,
     pub hash_count: usize,
     pub report_count: usize,
+    pub manifest_path: PathBuf,
 }
 
 /// Bir vaka için tüm alt klasörleri, logger'ı ve dosya işlemlerini yöneten kasadır.
@@ -99,7 +102,7 @@ impl EvidenceVault {
             format!("Vaka kasasi basariyla olusturuldu: {}", case_dir.display()),
         );
 
-        Ok(Self {
+        let vault = Self {
             case_name,
             case_dir,
             logs_dir,
@@ -112,7 +115,9 @@ impl EvidenceVault {
             notes_dir,
             logger,
             lock: Mutex::new(()),
-        })
+        };
+        let _ = vault.write_case_manifest();
+        Ok(vault)
     }
 
     /// Belirli kasa alt klasöründe yeni çıktı dosyası yolu üretir.
@@ -155,6 +160,8 @@ impl EvidenceVault {
             "evidence",
             format!("Vaka notu basariyla eklendi: {}", file_name),
         );
+        drop(_guard);
+        let _ = self.write_case_manifest();
         Ok(path)
     }
 
@@ -215,7 +222,61 @@ impl EvidenceVault {
             ios_count: self.list_files("ios")?.len(),
             hash_count: self.list_files("hash")?.len(),
             report_count: self.list_files("raporlar")?.len(),
+            manifest_path: self.case_manifest_path(),
         })
+    }
+
+    /// Vaka içindeki dosya envanterini ve SHA-256 bütünlük özetini yazar.
+    pub fn write_case_manifest(&self) -> AmeleResult<PathBuf> {
+        let manifest_path = self.case_manifest_path();
+        let files = collect_manifest_files(&self.case_dir, &manifest_path);
+        let manifest = json!({
+            "tool": "Amele Forensic Tool",
+            "tool_version": env!("CARGO_PKG_VERSION"),
+            "manifest_version": 1,
+            "generated_at": Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            "case": {
+                "name": &self.case_name,
+                "dir": &self.case_dir,
+                "metadata": read_case_metadata(&self.case_dir),
+            },
+            "folders": {
+                "logs": &self.logs_dir,
+                "outputs": &self.outputs_dir,
+                "ram": &self.ram_dir,
+                "android": &self.android_dir,
+                "ios": &self.ios_dir,
+                "reports": &self.reports_dir,
+                "hash": &self.hash_dir,
+                "notes": &self.notes_dir,
+            },
+            "counts": {
+                "outputs": count_entries_recursive(&self.outputs_dir),
+                "ram": count_entries_recursive(&self.ram_dir),
+                "android": count_entries_recursive(&self.android_dir),
+                "ios": count_entries_recursive(&self.ios_dir),
+                "reports": count_entries_recursive(&self.reports_dir),
+                "hash": count_entries_recursive(&self.hash_dir),
+                "notes": count_entries_recursive(&self.notes_dir),
+                "logs": count_entries_recursive(&self.logs_dir),
+                "files": files.len(),
+            },
+            "files": files,
+        });
+        let content = serde_json::to_string_pretty(&manifest)?;
+        fs::write(&manifest_path, content).map_err(|err| {
+            AmeleError::io(
+                HataKodu::DosyaYazma,
+                format!("Vaka manifesti yazilamadi: {}", manifest_path.display()),
+                err,
+            )
+        })?;
+        Ok(manifest_path)
+    }
+
+    /// Vaka bütünlük manifestinin standart yolunu döndürür.
+    pub fn case_manifest_path(&self) -> PathBuf {
+        self.case_dir.join("case_manifest.json")
     }
 
     /// Kullanıcı/API alt klasör adını gerçek kasa klasörüne eşler.
@@ -230,6 +291,107 @@ impl EvidenceVault {
             "hash" => &self.hash_dir,
             "notlar" => &self.notes_dir,
             _ => &self.case_dir,
+        }
+    }
+}
+
+fn collect_manifest_files(case_dir: &Path, manifest_path: &Path) -> Vec<serde_json::Value> {
+    let mut files = Vec::new();
+    collect_manifest_files_recursive(case_dir, case_dir, manifest_path, &mut files);
+    files.sort_by(|left, right| {
+        left["relative_path"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(right["relative_path"].as_str().unwrap_or_default())
+    });
+    files
+}
+
+fn collect_manifest_files_recursive(
+    root: &Path,
+    dir: &Path,
+    manifest_path: &Path,
+    files: &mut Vec<serde_json::Value>,
+) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path == manifest_path {
+            continue;
+        }
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if metadata.is_dir() {
+            collect_manifest_files_recursive(root, &path, manifest_path, files);
+            continue;
+        }
+        files.push(case_manifest_file_json(root, &path, &metadata));
+    }
+}
+
+fn case_manifest_file_json(root: &Path, path: &Path, metadata: &fs::Metadata) -> serde_json::Value {
+    let relative = relative_case_path(root, path);
+    let file_type = if metadata.file_type().is_symlink() {
+        "symlink"
+    } else {
+        "file"
+    };
+    let sha256 = if metadata.file_type().is_file() {
+        calculate_file_hash(path, HashAlgorithm::Sha256).ok()
+    } else {
+        None
+    };
+    let symlink_target = if metadata.file_type().is_symlink() {
+        fs::read_link(path)
+            .ok()
+            .map(|target| target.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
+    json!({
+        "relative_path": relative,
+        "path": path,
+        "folder": relative.split('/').next().unwrap_or_default(),
+        "type": file_type,
+        "size_bytes": metadata.len(),
+        "modified_at": metadata.modified().ok().map(format_system_time),
+        "sha256": sha256,
+        "symlink_target": symlink_target,
+    })
+}
+
+fn relative_case_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn format_system_time(time: std::time::SystemTime) -> String {
+    chrono::DateTime::<Local>::from(time)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
+}
+
+fn count_entries_recursive(path: &Path) -> usize {
+    let mut count = 0;
+    count_entries_recursive_inner(path, &mut count);
+    count
+}
+
+fn count_entries_recursive_inner(path: &Path, count: &mut usize) {
+    let Ok(entries) = fs::read_dir(path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        *count += 1;
+        if path.is_dir() {
+            count_entries_recursive_inner(&path, count);
         }
     }
 }
@@ -291,5 +453,31 @@ mod tests {
         assert!(note.is_file());
         let summary = vault.summary().unwrap();
         assert_eq!(summary.case_name, "case1");
+    }
+
+    #[test]
+    fn writes_case_integrity_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = EvidenceVault::create(dir.path(), "case_manifest").unwrap();
+        fs::write(vault.outputs_dir.join("sample.txt"), "sample evidence").unwrap();
+
+        let manifest_path = vault.write_case_manifest().unwrap();
+        assert!(manifest_path.is_file());
+
+        let content = fs::read_to_string(&manifest_path).unwrap();
+        let manifest: serde_json::Value = serde_json::from_str(&content).unwrap();
+        let files = manifest["files"].as_array().unwrap();
+        let sample = files
+            .iter()
+            .find(|entry| entry["relative_path"] == "ciktilar/sample.txt")
+            .unwrap();
+
+        assert_eq!(sample["type"], "file");
+        assert_eq!(sample["sha256"].as_str().unwrap().len(), 64);
+        assert!(
+            files
+                .iter()
+                .all(|entry| entry["relative_path"] != "case_manifest.json")
+        );
     }
 }

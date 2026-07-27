@@ -52,6 +52,7 @@ pub fn evidence_create_endpoint(body: &[u8]) -> Response {
                 "ios_count": summary.ios_count,
                 "hash_count": summary.hash_count,
                 "report_count": summary.report_count,
+                "manifest_path": summary.manifest_path,
             }))
         }
         Err(err) => json_error(500, err.to_string()),
@@ -127,7 +128,38 @@ pub fn evidence_summary_endpoint() -> Response {
             "ios_count": summary.ios_count,
             "hash_count": summary.hash_count,
             "report_count": summary.report_count,
+            "manifest_path": summary.manifest_path,
         })),
+        Err(err) => json_error(500, err.to_string()),
+    }
+}
+
+/// Seçili veya aktif vaka için bütünlük manifesti üretir.
+pub fn evidence_manifest_endpoint(body: &[u8]) -> Response {
+    #[derive(Deserialize)]
+    struct EvidenceManifestRequest {
+        case_name: Option<String>,
+    }
+
+    let request: EvidenceManifestRequest = match serde_json::from_slice(body) {
+        Ok(request) => request,
+        Err(err) => return json_error(400, err.to_string()),
+    };
+    let vault = match report_evidence_vault(request.case_name.as_deref()) {
+        Ok(vault) => vault,
+        Err(response) => return response,
+    };
+
+    match vault.write_case_manifest() {
+        Ok(path) => {
+            let manifest = fs::read_to_string(&path)
+                .ok()
+                .and_then(|content| serde_json::from_str::<Value>(&content).ok());
+            json_ok(json!({
+                "path": path,
+                "manifest": manifest,
+            }))
+        }
         Err(err) => json_error(500, err.to_string()),
     }
 }
@@ -250,7 +282,13 @@ pub fn report_create_endpoint(body: &[u8]) -> Response {
         .join(report::new_report_file_name(&vault.case_name, format));
 
     match report::create_report(&info, format, &target, Some(&vault)) {
-        Ok(path) => json_ok(json!({ "path": path })),
+        Ok(path) => {
+            let manifest_path = vault.write_case_manifest().ok();
+            json_ok(json!({
+                "path": path,
+                "manifest_path": manifest_path,
+            }))
+        }
         Err(err) => json_error(500, err.to_string()),
     }
 }
@@ -274,6 +312,7 @@ fn case_listing_json(case_name: &str, case_dir: &Path) -> Value {
         "ios_count": count_directory_entries(&case_dir.join("ios")),
         "hash_count": count_directory_entries(&case_dir.join("hash")),
         "report_count": count_directory_entries(&case_dir.join("raporlar")),
+        "manifest_path": case_dir.join("case_manifest.json"),
     })
 }
 

@@ -37,8 +37,10 @@ export function detailPanel({ tab, t, icon, state, pickerField, field, escapeHtm
       <div class="button-row">
         <button class="primary-button" data-action="create-case">${icon("folder")} ${t("case.create")}</button>
         <button class="secondary-button" data-action="refresh-cases">${icon("refresh")} ${t("case.refresh")}</button>
+        <button class="secondary-button" data-action="create-manifest">${icon("shield")} ${t("case.manifest.create")}</button>
       </div>
       <div class="status-badge" data-case-status>${icon("info")} ${state.activeCase ? t("case.created", { path: state.activeCase.case_dir }) : t("case.notCreated")}</div>
+      <div class="status-badge" data-manifest-status>${icon("shield")} ${state.activeCase?.manifest_path ? t("case.manifest.ready", { path: escapeHtml(state.activeCase.manifest_path) }) : t("case.manifest.waiting")}</div>
       <div class="section-divider"></div>
       <p class="section-label">${t("case.files")}</p>
       ${field(t("case.folder"), `<select id="case-folder" class="select"><option value="ciktilar">${t("case.outputs")}</option><option value="disk_imajlari">${t("case.diskImages")}</option><option value="ram">${t("case.ram")}</option><option value="android">${t("case.android")}</option><option value="raporlar">${t("case.reports")}</option><option value="hash">${t("case.hash")}</option><option value="notlar">${t("case.notes")}</option><option value="gunlukler">${t("case.logs")}</option></select>`)}

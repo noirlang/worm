@@ -344,6 +344,14 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
             );
             evidence::evidence_list_files_endpoint(body)
         }
+        ("POST", "/api/evidence-manifest") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:evidence",
+                "Vaka butunluk manifesti uretiliyor",
+            );
+            evidence::evidence_manifest_endpoint(body)
+        }
         ("GET", "/api/evidence-cases") => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Debug,

@@ -26,7 +26,7 @@ The app runs as a real desktop window on Linux and Windows.
 - **Remote memory acquisition:** start, pause, resume, stop, track, and download RAM dumps from agents.
 - **Android tools:** check ADB, list devices, collect logical data, collect filesystem data, capture volatile data, and analyze Android case outputs.
 - **iOS tools:** normalize unencrypted or already decrypted iTunes/Finder backups into a browsable Backup2FS-style file system, with per-file MD5/SHA1/SHA256 CSV logging.
-- **Case management:** store acquisitions, notes, hashes, Android outputs, iOS outputs, and reports under selected cases.
+- **Case management:** store acquisitions, notes, hashes, Android outputs, iOS outputs, reports, and `case_manifest.json` integrity inventories under selected cases.
 - **Hashing and verification:** calculate MD5, SHA1, SHA256, and SHA512; generate sidecar hashes for acquired evidence.
 - **Image viewing:** mount supported images read-only for inspection.
 - **Reports:** create case reports from collected outputs and notes.
@@ -190,7 +190,7 @@ Uygulama Linux ve Windows üzerinde gerçek bir masaüstü penceresi olarak çal
 - **Uzak bellek (RAM) edinimi:** Ajanlar üzerinden RAM edinimini başlatın, duraklatın, sürdürün, durdurun, izleyin ve RAM dökümlerini indirin.
 - **Android araçları:** ADB durumunu kontrol edin, cihazları listeleyin, mantıksal veri toplayın, dosya sistemi verisi toplayın, uçucu (volatile) verileri alın ve Android vaka çıktılarını analiz edin.
 - **iOS araçları:** Şifresiz veya önceden decrypt edilmiş iTunes/Finder backup klasörlerini Backup2FS düzeninde gezilebilir dosya sistemine dönüştürün; her dosya için MD5/SHA1/SHA256 CSV log üretin.
-- **Vaka yönetimi:** Edinimleri, notları, hash değerlerini, Android/iOS çıktılarını ve raporları seçilen vakalar altında saklayın.
+- **Vaka yönetimi:** Edinimleri, notları, hash değerlerini, Android/iOS çıktılarını, raporları ve `case_manifest.json` bütünlük envanterlerini seçilen vakalar altında saklayın.
 - **Hash hesaplama ve doğrulama:** MD5, SHA1, SHA256 ve SHA512 hesaplayın; elde edilen deliller için yan dosya (sidecar) hash dosyaları oluşturun.
 - **İmaj görüntüleme:** Desteklenen imajları inceleme amacıyla salt okunur (read-only) olarak bağlayın (mount).
 - **Raporlar:** Toplanan çıktılardan ve notlardan vaka raporları oluşturun.
