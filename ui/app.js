@@ -60,11 +60,13 @@ const state = {
   caseBaseDir: "",
   profiles: [],
   activeProfile: null,
+  mobileToolsAccess: { allowed: false, reason: "" },
   profileGateVisible: false,
   profileGateMode: "select",
   profileDraft: {
     fullName: "",
     username: "",
+    onlineIdentifier: "",
     openDirectly: false
   },
   imageMount: null,
@@ -258,8 +260,10 @@ async function loadProfiles() {
     if (state.activeProfile) {
       setLanguage(state.activeProfile.language === "en" ? "en" : "tr");
       setTheme(state.activeProfile.theme === "light" ? "light" : "dark");
+      await refreshMobileToolsAccess({ silent: true });
       hideProfileGate();
     } else {
+      state.mobileToolsAccess = { allowed: false, reason: "" };
       state.profileGateMode = state.profiles.length ? "select" : "create";
       showProfileGate();
     }
@@ -287,7 +291,8 @@ function hideProfileGate() {
 function renderProfileGate(errorMessage = "") {
   if (!profileGate) return;
   profileGate.hidden = false;
-  const isCreate = state.profileGateMode === "create" || !state.profiles.length;
+  const isOnline = state.profileGateMode === "online";
+  const isCreate = !isOnline && (state.profileGateMode === "create" || !state.profiles.length);
   const cards = state.profiles.map((profile) => `
     <button class="profile-card" data-action="profile-select" data-username="${escapeHtml(profile.username)}">
       <span class="profile-avatar">${profileInitials(profile)}</span>
@@ -300,19 +305,22 @@ function renderProfileGate(errorMessage = "") {
       <div class="profile-gate-head">
         <img src="./assets/logo/${state.theme === "light" ? "logo-siyah.png" : "logo.png"}" alt="Amele" />
         <div>
-          <h1>${t(isCreate ? "profile.createTitle" : "profile.selectTitle")}</h1>
-          <p>${t(isCreate ? "profile.createDesc" : "profile.selectDesc")}</p>
+          <h1>${t(isOnline ? "profile.onlineTitle" : (isCreate ? "profile.createTitle" : "profile.selectTitle"))}</h1>
+          <p>${t(isOnline ? "profile.onlineDesc" : (isCreate ? "profile.createDesc" : "profile.selectDesc"))}</p>
         </div>
       </div>
       ${errorMessage ? `<div class="error-panel">${escapeHtml(errorMessage)}</div>` : ""}
-      ${!isCreate ? `<div class="profile-list">${cards}</div>` : ""}
-      ${isCreate ? profileFormHtml() : `
+      ${isOnline ? onlineProfileFormHtml() : (isCreate ? profileFormHtml() : `
+        <div class="profile-list">${cards}</div>
         <label class="check-row">
           <input type="checkbox" id="profile-open-directly" />
           <span>${t("profile.openDirectly")}</span>
         </label>
-        <button class="secondary-button" data-action="profile-create-start">${icon("user")} ${t("profile.newProfile")}</button>
-      `}
+        <div class="button-row">
+          <button class="secondary-button" data-action="profile-create-start">${icon("user")} ${t("profile.newProfile")}</button>
+          <button class="primary-button" data-action="profile-online-start">${icon("globe")} ${t("profile.onlineConnect")}</button>
+        </div>
+      `)}
     </section>
   `;
   hydrateIcons(profileGate);
@@ -344,7 +352,40 @@ function profileFormHtml() {
       </label>
       <div class="button-row">
         ${state.profiles.length ? `<button class="secondary-button" data-action="profile-select-back">${t("profile.backToProfiles")}</button>` : ""}
+        <button class="secondary-button" data-action="profile-online-start">${icon("globe")} ${t("profile.onlineConnect")}</button>
         <button class="primary-button" data-action="profile-submit">${icon("user")} ${t("profile.createButton")}</button>
+      </div>
+    </div>
+  `;
+}
+
+function onlineProfileFormHtml() {
+  const draft = state.profileDraft || {};
+  const draftLanguage = draft.language || state.language;
+  const draftTheme = draft.theme || state.theme;
+  return `
+    <div class="profile-form">
+      ${field(t("settings.language"), `
+        <select id="profile-language" class="select">
+          <option value="tr" ${draftLanguage === "tr" ? "selected" : ""}>Türkçe</option>
+          <option value="en" ${draftLanguage === "en" ? "selected" : ""}>English</option>
+        </select>
+      `)}
+      ${field(t("settings.darkTheme"), `
+        <select id="profile-theme" class="select">
+          <option value="dark" ${draftTheme !== "light" ? "selected" : ""}>${t("profile.themeDark")}</option>
+          <option value="light" ${draftTheme === "light" ? "selected" : ""}>${t("profile.themeLight")}</option>
+        </select>
+      `)}
+      ${field(t("profile.onlineIdentifier"), `<input id="profile-online-identifier" class="input" autocomplete="username" value="${escapeHtml(draft.onlineIdentifier || "")}" />`)}
+      ${field(t("profile.onlinePassword"), `<input id="profile-online-password" class="input" type="password" autocomplete="current-password" />`)}
+      <label class="check-row">
+        <input type="checkbox" id="profile-online-directly" ${draft.openDirectly ? "checked" : ""} />
+        <span>${t("profile.openDirectly")}</span>
+      </label>
+      <div class="button-row">
+        <button class="secondary-button" data-action="profile-online-back">${t(state.profiles.length ? "profile.backToProfiles" : "profile.localSetup")}</button>
+        <button class="primary-button" data-action="profile-online-submit">${icon("globe")} ${t("profile.onlineLogin")}</button>
       </div>
     </div>
   `;
@@ -353,15 +394,18 @@ function profileFormHtml() {
 function captureProfileDraft() {
   const fullName = document.querySelector("#profile-full-name");
   const username = document.querySelector("#profile-username");
+  const onlineIdentifier = document.querySelector("#profile-online-identifier");
   const language = document.querySelector("#profile-language");
   const theme = document.querySelector("#profile-theme");
   const direct = document.querySelector("#profile-create-directly");
+  const onlineDirect = document.querySelector("#profile-online-directly");
   state.profileDraft = {
     fullName: fullName ? fullName.value : state.profileDraft?.fullName || "",
     username: username ? username.value : state.profileDraft?.username || "",
+    onlineIdentifier: onlineIdentifier ? onlineIdentifier.value : state.profileDraft?.onlineIdentifier || "",
     language: language ? language.value : state.profileDraft?.language || state.language,
     theme: theme ? theme.value : state.profileDraft?.theme || state.theme,
-    openDirectly: direct ? direct.checked : Boolean(state.profileDraft?.openDirectly)
+    openDirectly: direct ? direct.checked : (onlineDirect ? onlineDirect.checked : Boolean(state.profileDraft?.openDirectly))
   };
 }
 
@@ -387,8 +431,10 @@ async function selectProfile(username) {
     body: JSON.stringify({ username, open_directly: openDirectly })
   });
   state.activeProfile = result.profile;
+  upsertProfile(result.profile);
   setLanguage(state.activeProfile.language === "en" ? "en" : "tr");
   setTheme(state.activeProfile.theme === "light" ? "light" : "dark");
+  await refreshMobileToolsAccess({ silent: true });
   hideProfileGate();
   syncProfileButton();
   await loadPersistedSettings();
@@ -410,9 +456,10 @@ async function createProfileFromGate() {
     method: "POST",
     body: JSON.stringify({ full_name: fullName, username, language, theme, open_directly: openDirectly })
   });
-  state.profiles.push(result.profile);
+  upsertProfile(result.profile);
   state.activeProfile = result.profile;
-  state.profileDraft = { fullName: "", username: "", openDirectly: false };
+  state.mobileToolsAccess = { allowed: false, reason: "" };
+  state.profileDraft = { fullName: "", username: "", onlineIdentifier: "", openDirectly: false };
   setLanguage(result.profile.language === "en" ? "en" : "tr");
   setTheme(result.profile.theme === "light" ? "light" : "dark");
   hideProfileGate();
@@ -420,6 +467,132 @@ async function createProfileFromGate() {
   await loadPersistedSettings();
   await loadEvidenceCases();
   render();
+}
+
+async function connectOnlineProfileFromGate() {
+  captureProfileDraft();
+  const identifier = document.querySelector("#profile-online-identifier")?.value.trim() || "";
+  const password = document.querySelector("#profile-online-password")?.value || "";
+  const language = document.querySelector("#profile-language")?.value || state.language;
+  const theme = document.querySelector("#profile-theme")?.value || state.theme;
+  const openDirectly = Boolean(document.querySelector("#profile-online-directly")?.checked);
+  if (!identifier || !password) {
+    showToast(t("profile.onlineRequired"), "error");
+    return;
+  }
+  const result = await apiRequest("/api/profiles/online-login", {
+    method: "POST",
+    body: JSON.stringify({ identifier, password, language, theme, open_directly: openDirectly })
+  });
+  state.activeProfile = result.profile;
+  upsertProfile(result.profile);
+  state.mobileToolsAccess = result.access || { allowed: false, reason: "" };
+  state.profileDraft = {
+    fullName: "",
+    username: "",
+    onlineIdentifier: "",
+    language,
+    theme,
+    openDirectly
+  };
+  setLanguage(result.profile.language === "en" ? "en" : "tr");
+  setTheme(result.profile.theme === "light" ? "light" : "dark");
+  hideProfileGate();
+  syncProfileButton();
+  await loadPersistedSettings();
+  await loadEvidenceCases();
+  render();
+  showToast(t("profile.onlineConnected"), "success");
+}
+
+async function syncOnlineProfile(button) {
+  button.disabled = true;
+  try {
+    const result = await apiRequest("/api/profiles/online-sync", { method: "POST" });
+    state.activeProfile = result.profile;
+    upsertProfile(result.profile);
+    state.mobileToolsAccess = result.access || { allowed: false, reason: "" };
+    syncProfileButton();
+    render();
+    showToast(t("profile.onlineSynced"), "success");
+  } catch (error) {
+    showToast(t("profile.onlineSyncFailed", { message: error.message }), "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function disconnectOnlineProfile(button) {
+  button.disabled = true;
+  try {
+    const result = await apiRequest("/api/profiles/online-logout", { method: "POST" });
+    state.activeProfile = result.profile || state.activeProfile;
+    if (result.profile) upsertProfile(result.profile);
+    state.mobileToolsAccess = result.access || { allowed: false, reason: "" };
+    syncProfileButton();
+    render();
+    showToast(t("profile.onlineDisconnectedToast"), "success");
+  } catch (error) {
+    showToast(t("profile.onlineDisconnectFailed", { message: error.message }), "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function upsertProfile(profile) {
+  if (!profile) return;
+  const index = state.profiles.findIndex((item) => item.username === profile.username);
+  if (index >= 0) {
+    state.profiles[index] = profile;
+  } else {
+    state.profiles.push(profile);
+  }
+}
+
+async function refreshMobileToolsAccess({ silent = false } = {}) {
+  if (!backendReady() || !state.activeProfile) {
+    state.mobileToolsAccess = { allowed: false, reason: "" };
+    return state.mobileToolsAccess;
+  }
+  try {
+    const result = await apiRequest("/api/profiles/mobile-access");
+    state.mobileToolsAccess = result.access || { allowed: false, reason: "" };
+    if (result.access?.profile) {
+      state.activeProfile = result.access.profile;
+      upsertProfile(result.access.profile);
+    }
+  } catch (error) {
+    state.mobileToolsAccess = { allowed: false, reason: error.message || "" };
+    if (!silent) showToast(error.message, "error");
+  }
+  return state.mobileToolsAccess;
+}
+
+function isMobileToolsRoute(route) {
+  return route === "android" || route === "ios" || route.startsWith("android:");
+}
+
+function onlineMobileToolsAllowed() {
+  return Boolean(state.mobileToolsAccess?.allowed);
+}
+
+function mobileToolsLockedPage({ t, icon, pageTitle }) {
+  return `
+    <section class="page">
+      ${pageTitle(t("mobile.locked.title"), t("mobile.locked.desc"), "key", icon)}
+      <div class="workflow-layout locked-layout">
+        <div class="workflow-panel mobile-lock-panel">
+          <span class="metric-icon">${icon("shield")}</span>
+          <h3>${t("mobile.locked.heading")}</h3>
+          <p>${t("mobile.locked.body")}</p>
+          <div class="button-row">
+            <button class="primary-button" data-action="profile-online-start">${icon("globe")} ${t("profile.onlineConnect")}</button>
+            <button class="secondary-button" data-route="profile">${icon("user")} ${t("profile.title")}</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
 }
 
 function render() {
@@ -438,7 +611,9 @@ function render() {
     escapeHtml
   });
 
-  if (state.route.startsWith("workflow:")) {
+  if (isMobileToolsRoute(state.route) && !onlineMobileToolsAllowed()) {
+    view.innerHTML = mobileToolsLockedPage({ t, icon, pageTitle });
+  } else if (state.route.startsWith("workflow:")) {
     view.innerHTML = workflowPage({
       id: state.route.split(":")[1],
       workflows,
@@ -608,6 +783,7 @@ const routes = {
 
 function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
   const profile = state.activeProfile;
+  const online = profile?.online || null;
   const caseCards = state.cases.length
     ? state.cases.map((item) => `
         <article class="case-profile-card">
@@ -654,12 +830,101 @@ function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
           </div>
         </article>
         <article class="settings-card">
+          <span class="settings-kicker">${t("profile.onlineAccount")}</span>
+          <h3>${online ? escapeHtml(online.username || profile?.username || "-") : t("profile.onlineDisconnected")}</h3>
+          <div class="settings-row">
+            <strong>${t("profile.onlineStatus")}</strong>
+            <span class="status-pill ${online ? "ok" : "warn"}">${online ? t("profile.onlineConnectedShort") : t("profile.onlineDisconnectedShort")}</span>
+          </div>
+          <div class="settings-row">
+            <strong>${t("profile.roles")}</strong>
+            <span class="role-list">${onlineRoleBadges(online, t, escapeHtml)}</span>
+          </div>
+          <div class="settings-row">
+            <strong>${t("profile.license")}</strong>
+            <span>${onlineLicenseText(online, t, escapeHtml)}</span>
+          </div>
+          <div class="settings-row">
+            <strong>${t("profile.mobileAccess")}</strong>
+            <span class="status-pill ${onlineMobileToolsAllowed() ? "ok" : "danger"}">${onlineMobileToolsAllowed() ? t("profile.mobileUnlocked") : t("profile.mobileLocked")}</span>
+          </div>
+          <div class="settings-row">
+            <strong>${t("profile.workedTypes")}</strong>
+            <span>${workedCaseTypesText(online, t, escapeHtml)}</span>
+          </div>
+          <div class="settings-row">
+            <strong>${t("profile.lastSync")}</strong>
+            <small>${escapeHtml(online?.last_sync_at || "-")}</small>
+          </div>
+          <div class="button-row">
+            ${online ? `<button class="secondary-button" data-action="profile-online-sync">${icon("refresh")} ${t("profile.onlineSync")}</button>` : `<button class="primary-button" data-action="profile-online-start">${icon("globe")} ${t("profile.onlineConnect")}</button>`}
+            ${online ? `<button class="danger-button" data-action="profile-online-logout">${icon("stop")} ${t("profile.onlineDisconnect")}</button>` : ""}
+          </div>
+          ${profileActivityHtml(profile, t, icon, escapeHtml)}
+        </article>
+        <article class="settings-card">
           <span class="settings-kicker">${t("profile.cases")}</span>
           <h3>${t("profile.caseTitle")}</h3>
           <div class="profile-case-list">${caseCards}</div>
         </article>
       </div>
     </section>
+  `;
+}
+
+function onlineRoleBadges(online, t, escapeHtml) {
+  const roles = Array.isArray(online?.roles) ? online.roles : [];
+  if (!roles.length) return `<span class="status-pill warn">${escapeHtml(t("profile.noRoles"))}</span>`;
+  return roles
+    .map((role) => `<span class="status-pill ok">${escapeHtml(roleLabel(role, t))}</span>`)
+    .join("");
+}
+
+function roleLabel(role, t) {
+  const labels = {
+    bdfl: "BDFL",
+    developer: t("profile.role.developer"),
+    member: t("profile.role.member"),
+    "windows-maintainer": "Windows Maintainer",
+    "linux-maintainer": "Linux Maintainer",
+    "android-maintainer": "Android Maintainer"
+  };
+  return labels[role] || role;
+}
+
+function onlineLicenseText(online, t, escapeHtml) {
+  if (!online) return escapeHtml(t("profile.onlineRequiredForLicense"));
+  const licenses = Array.isArray(online.licenses) ? online.licenses : [];
+  const active = licenses.find((license) => license.status === "active");
+  if (active) {
+    const plan = active.plan || t("unknown");
+    return `${escapeHtml(t("profile.licenseActive"))} · ${escapeHtml(plan)}`;
+  }
+  return escapeHtml(online.has_license ? t("profile.licenseActive") : t("profile.licenseNone"));
+}
+
+function workedCaseTypesText(online, t, escapeHtml) {
+  const values = Array.isArray(online?.worked_case_types) ? online.worked_case_types : [];
+  if (!values.length) return escapeHtml(t("profile.workedTypesEmpty"));
+  return values.map((value) => escapeHtml(value)).join(" · ");
+}
+
+function profileActivityHtml(profile, t, icon, escapeHtml) {
+  const log = Array.isArray(profile?.activity_log) ? profile.activity_log.slice(-5).reverse() : [];
+  if (!log.length) return `<div class="log-box profile-activity-log">• ${escapeHtml(t("profile.activityEmpty"))}</div>`;
+  return `
+    <div class="profile-activity-log">
+      <p class="section-label">${icon("clock")} ${t("profile.activity")}</p>
+      ${log.map((entry) => `
+        <div class="tree-node">
+          <strong>${escapeHtml(entry.category || "-")} · ${escapeHtml(entry.action || "-")}</strong>
+          <span>
+            ${escapeHtml(entry.case_name || entry.details || "-")}
+            <small>${escapeHtml(entry.timestamp || "")}</small>
+          </span>
+        </div>
+      `).join("")}
+    </div>
   `;
 }
 
@@ -1045,6 +1310,12 @@ document.addEventListener("change", async (event) => {
     return;
   }
 
+  const profileOnlineDirect = event.target.closest("#profile-online-directly");
+  if (profileOnlineDirect) {
+    captureProfileDraft();
+    return;
+  }
+
   const select = event.target.closest("[data-action='language-select']");
   if (select) {
     try {
@@ -1120,7 +1391,11 @@ document.addEventListener("change", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.closest("#profile-full-name") || event.target.closest("#profile-username")) {
+  if (
+    event.target.closest("#profile-full-name") ||
+    event.target.closest("#profile-username") ||
+    event.target.closest("#profile-online-identifier")
+  ) {
     captureProfileDraft();
   }
   const iosBackupPath = event.target.closest("#ios-backup-path");
@@ -1133,6 +1408,18 @@ async function handleAction(button) {
   const action = button.dataset.action;
   if (action === "profile-create-start" || action === "profile-new") {
     state.profileGateMode = "create";
+    showProfileGate();
+    return;
+  }
+  if (action === "profile-online-start") {
+    captureProfileDraft();
+    state.profileGateMode = "online";
+    showProfileGate();
+    return;
+  }
+  if (action === "profile-online-back") {
+    captureProfileDraft();
+    state.profileGateMode = state.profiles.length ? "select" : "create";
     showProfileGate();
     return;
   }
@@ -1159,12 +1446,30 @@ async function handleAction(button) {
     }
     return;
   }
+  if (action === "profile-online-submit") {
+    try {
+      await connectOnlineProfileFromGate();
+    } catch (error) {
+      showToast(t("profile.onlineFailed", { message: error.message }), "error");
+      showProfileGate(error.message);
+    }
+    return;
+  }
+  if (action === "profile-online-sync") {
+    await syncOnlineProfile(button);
+    return;
+  }
+  if (action === "profile-online-logout") {
+    await disconnectOnlineProfile(button);
+    return;
+  }
   if (action === "profile-logout") {
     try {
       await apiRequest("/api/profiles/logout", { method: "POST" });
       state.activeProfile = null;
       state.activeCase = null;
       state.cases = [];
+      state.mobileToolsAccess = { allowed: false, reason: "" };
       state.profileGateMode = state.profiles.length ? "select" : "create";
       syncProfileButton();
       showProfileGate();
@@ -1175,6 +1480,12 @@ async function handleAction(button) {
   }
 
   if (action?.startsWith("android-")) {
+    if (!onlineMobileToolsAllowed()) {
+      showToast(t("mobile.locked.toast"), "warning");
+      state.profileGateMode = "online";
+      showProfileGate();
+      return;
+    }
     const handled = await handleAndroidAction(button, {
       apiRequest,
       backendReady,
@@ -1190,6 +1501,12 @@ async function handleAction(button) {
   }
 
   if (action?.startsWith("ios-")) {
+    if (!onlineMobileToolsAllowed()) {
+      showToast(t("mobile.locked.toast"), "warning");
+      state.profileGateMode = "online";
+      showProfileGate();
+      return;
+    }
     const handled = await handleIosAction(button, {
       apiRequest,
       backendReady,

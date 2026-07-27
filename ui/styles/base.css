@@ -181,6 +181,32 @@
   gap: 10px;
 }
 
+.role-list {
+  display: inline-flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profile-activity-log {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.locked-layout {
+  grid-template-columns: minmax(0, 760px);
+}
+
+.mobile-lock-panel {
+  min-height: 260px;
+  align-content: center;
+}
+
+.mobile-lock-panel .metric-icon {
+  margin-bottom: 16px;
+}
+
 .case-profile-card {
   display: grid;
   gap: 6px;
