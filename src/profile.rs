@@ -729,7 +729,9 @@ fn origin_from_url(url: &str) -> Option<String> {
     Some(format!("{scheme}://{host}"))
 }
 
-#[derive(Debug, Deserialize)]
+const COOKIE_CREDENTIAL_PREFIX: &str = "cookie:";
+
+#[derive(Debug)]
 struct OnlineAuthResponse {
     user: OnlineUserResponse,
     token: String,
@@ -738,6 +740,7 @@ struct OnlineAuthResponse {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OnlineUserResponse {
+    #[serde(alias = "_id")]
     id: String,
     username: String,
     #[serde(default)]
@@ -750,16 +753,6 @@ struct OnlineUserResponse {
     roles: Vec<String>,
     #[serde(default)]
     has_license: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct OnlineUserEnvelope {
-    user: OnlineUserResponse,
-}
-
-#[derive(Debug, Deserialize)]
-struct OnlineSessionEnvelope {
-    user: Option<OnlineUserResponse>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -789,37 +782,20 @@ fn online_login(identifier: &str, password: &str) -> AmeleResult<OnlineAuthRespo
         "password": password,
     });
     let url = format!("{}/api/auth/login", online_api_base_url());
-    let value = online_post_json(&url, None, &payload)?;
-    serde_json::from_value(value).map_err(|err| {
-        AmeleError::new(
-            HataKodu::ProtokolJson,
-            format!("Online giriş cevabı parse edilemedi: {err}"),
-        )
-    })
+    let response = online_post_json_with_session_cookie(&url, None, &payload)?;
+    parse_online_auth_response(response.value, response.session_cookie)
 }
 
 fn online_fetch_user(token: &str, username: &str) -> AmeleResult<OnlineUserResponse> {
     let url = format!("{}/api/users/{}", online_api_base_url(), username);
     let value = online_get_json(&url, Some(token))?;
-    let envelope: OnlineUserEnvelope = serde_json::from_value(value).map_err(|err| {
-        AmeleError::new(
-            HataKodu::ProtokolJson,
-            format!("Online kullanıcı cevabı parse edilemedi: {err}"),
-        )
-    })?;
-    Ok(envelope.user)
+    parse_required_online_user(&value, "Online kullanıcı cevabı parse edilemedi")
 }
 
 fn online_fetch_session(token: &str) -> AmeleResult<OnlineUserResponse> {
     let url = format!("{}/api/auth/session", online_api_base_url());
     let value = online_get_json(&url, Some(token))?;
-    let envelope: OnlineSessionEnvelope = serde_json::from_value(value).map_err(|err| {
-        AmeleError::new(
-            HataKodu::ProtokolJson,
-            format!("Online oturum cevabı parse edilemedi: {err}"),
-        )
-    })?;
-    envelope.user.ok_or_else(|| {
+    parse_optional_online_user(&value, "Online oturum cevabı parse edilemedi")?.ok_or_else(|| {
         AmeleError::new(
             HataKodu::YetkisizErisim,
             "Online oturum geçersiz. Yeniden giriş yapın.",
@@ -830,12 +806,13 @@ fn online_fetch_session(token: &str) -> AmeleResult<OnlineUserResponse> {
 fn online_fetch_licenses(token: &str) -> AmeleResult<Vec<OnlineLicenseSummary>> {
     let url = format!("{}/api/licenses/my", online_api_base_url());
     let value = online_get_json(&url, Some(token))?;
-    let envelope: OnlineLicensesEnvelope = serde_json::from_value(value).map_err(|err| {
-        AmeleError::new(
-            HataKodu::ProtokolJson,
-            format!("Online lisans cevabı parse edilemedi: {err}"),
-        )
-    })?;
+    let envelope: OnlineLicensesEnvelope = serde_json::from_value(response_payload(&value).clone())
+        .map_err(|err| {
+            AmeleError::new(
+                HataKodu::ProtokolJson,
+                format!("Online lisans cevabı parse edilemedi: {err}"),
+            )
+        })?;
     Ok(envelope
         .licenses
         .into_iter()
@@ -855,10 +832,14 @@ fn online_get_json(url: &str, bearer: Option<&str>) -> AmeleResult<Value> {
     let response = request
         .call()
         .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
-    parse_online_response(response)
+    parse_online_response(response).map(|response| response.value)
 }
 
-fn online_post_json(url: &str, bearer: Option<&str>, payload: &Value) -> AmeleResult<Value> {
+fn online_post_json_with_session_cookie(
+    url: &str,
+    bearer: Option<&str>,
+    payload: &Value,
+) -> AmeleResult<OnlineJsonResponse> {
     let agent = online_agent();
     let request =
         apply_online_headers(agent.post(url), bearer).set("Content-Type", "application/json");
@@ -866,6 +847,12 @@ fn online_post_json(url: &str, bearer: Option<&str>, payload: &Value) -> AmeleRe
         .send_string(&payload.to_string())
         .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
     parse_online_response(response)
+}
+
+#[derive(Debug)]
+struct OnlineJsonResponse {
+    value: Value,
+    session_cookie: Option<String>,
 }
 
 fn online_agent() -> ureq::Agent {
@@ -882,26 +869,143 @@ fn apply_online_headers(request: ureq::Request, bearer: Option<&str>) -> ureq::R
         .set("Origin", &origin)
         .set("Referer", &referer)
         .set("User-Agent", concat!("Amele/", env!("CARGO_PKG_VERSION")));
-    if let Some(token) = bearer {
-        request.set("Authorization", &format!("Bearer {token}"))
+    if let Some(credential) = bearer {
+        if let Some(cookie) = credential.strip_prefix(COOKIE_CREDENTIAL_PREFIX) {
+            request.set("Cookie", cookie)
+        } else {
+            request.set("Authorization", &format!("Bearer {credential}"))
+        }
     } else {
         request
     }
 }
 
-fn parse_online_response(response: ureq::Response) -> AmeleResult<Value> {
+fn parse_online_response(response: ureq::Response) -> AmeleResult<OnlineJsonResponse> {
+    let session_cookie = response
+        .header("Set-Cookie")
+        .and_then(session_cookie_from_header)
+        .map(cookie_credential);
     let text = response.into_string().map_err(|err| {
         AmeleError::new(
             HataKodu::DosyaOkuma,
             format!("Online API cevabı okunamadı: {err}"),
         )
     })?;
-    serde_json::from_str(&text).map_err(|err| {
+    let value = serde_json::from_str(&text).map_err(|err| {
         AmeleError::new(
             HataKodu::ProtokolJson,
             format!("Online API cevabı JSON değil: {err}"),
         )
+    })?;
+    Ok(OnlineJsonResponse {
+        value,
+        session_cookie,
     })
+}
+
+fn parse_online_auth_response(
+    value: Value,
+    session_cookie: Option<String>,
+) -> AmeleResult<OnlineAuthResponse> {
+    let user = parse_required_online_user(&value, "Online giriş cevabı parse edilemedi")?;
+    let payload = response_payload(&value);
+    let token = string_field(payload, &["token", "accessToken", "jwt"])
+        .or_else(|| string_field(&value, &["token", "accessToken", "jwt"]))
+        .map(ToOwned::to_owned)
+        .or(session_cookie)
+        .ok_or_else(|| {
+            AmeleError::new(
+                HataKodu::ProtokolJson,
+                format!(
+                    "Online giriş cevabında token veya session cookie yok. Gelen alanlar: {}",
+                    json_shape(&value)
+                ),
+            )
+        })?;
+
+    Ok(OnlineAuthResponse { user, token })
+}
+
+fn parse_required_online_user(value: &Value, context: &str) -> AmeleResult<OnlineUserResponse> {
+    parse_optional_online_user(value, context)?.ok_or_else(|| {
+        AmeleError::new(
+            HataKodu::ProtokolJson,
+            format!(
+                "{context}: user alanı yok. Gelen alanlar: {}",
+                json_shape(value)
+            ),
+        )
+    })
+}
+
+fn parse_optional_online_user(
+    value: &Value,
+    context: &str,
+) -> AmeleResult<Option<OnlineUserResponse>> {
+    let payload = response_payload(value);
+    let Some(user_value) = payload.get("user").or_else(|| value.get("user")) else {
+        return Ok(None);
+    };
+    if user_value.is_null() {
+        return Ok(None);
+    }
+    serde_json::from_value(user_value.clone())
+        .map(Some)
+        .map_err(|err| AmeleError::new(HataKodu::ProtokolJson, format!("{context}: {err}")))
+}
+
+fn response_payload(value: &Value) -> &Value {
+    value
+        .get("data")
+        .filter(|payload| payload.is_object())
+        .unwrap_or(value)
+}
+
+fn string_field<'a>(value: &'a Value, names: &[&str]) -> Option<&'a str> {
+    names.iter().find_map(|name| {
+        value
+            .get(*name)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    })
+}
+
+fn session_cookie_from_header(header: &str) -> Option<String> {
+    ["amele_token", "amele_session"]
+        .iter()
+        .find_map(|name| extract_cookie(header, name))
+}
+
+fn extract_cookie(header: &str, name: &str) -> Option<String> {
+    let needle = format!("{name}=");
+    let start = header.find(&needle)?;
+    let rest = &header[start..];
+    let end = rest.find(';').unwrap_or(rest.len());
+    let cookie = rest[..end].trim();
+    if cookie.is_empty() || cookie.contains('\r') || cookie.contains('\n') {
+        None
+    } else {
+        Some(cookie.to_string())
+    }
+}
+
+fn cookie_credential(cookie: String) -> String {
+    format!("{COOKIE_CREDENTIAL_PREFIX}{cookie}")
+}
+
+fn json_shape(value: &Value) -> String {
+    match value {
+        Value::Object(map) => {
+            let keys = map.keys().map(String::as_str).collect::<Vec<_>>();
+            format!("{{{}}}", keys.join(", "))
+        }
+        Value::Array(_) => "array".to_string(),
+        Value::String(_) => "string".to_string(),
+        Value::Bool(_) => "bool".to_string(),
+        Value::Number(_) => "number".to_string(),
+        Value::Null => "null".to_string(),
+    }
 }
 
 fn online_request_error(context: &str, err: ureq::Error) -> AmeleError {
@@ -1159,5 +1263,52 @@ mod tests {
     fn masks_license_keys_before_profile_storage() {
         assert_eq!(mask_secret("AMELE-1234-5678"), "****5678");
         assert_eq!(mask_secret(""), "");
+    }
+
+    #[test]
+    fn parses_login_token_from_json_response() {
+        let auth = parse_online_auth_response(
+            serde_json::json!({
+                "user": {
+                    "id": "u1",
+                    "username": "melih",
+                    "firstName": "Melih",
+                    "lastName": "Emik",
+                    "roles": ["bdfl"],
+                    "hasLicense": true
+                },
+                "token": "jwt-token"
+            }),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(auth.user.username, "melih");
+        assert_eq!(auth.token, "jwt-token");
+    }
+
+    #[test]
+    fn parses_login_session_cookie_when_token_is_absent() {
+        let auth = parse_online_auth_response(
+            serde_json::json!({
+                "data": {
+                    "user": {
+                        "id": "u1",
+                        "username": "melih",
+                        "firstName": "Melih",
+                        "lastName": "Emik",
+                        "roles": ["member"]
+                    }
+                }
+            }),
+            session_cookie_from_header(
+                "amele_session=abc.def; Path=/; HttpOnly; Secure; SameSite=Lax",
+            )
+            .map(cookie_credential),
+        )
+        .unwrap();
+
+        assert_eq!(auth.user.username, "melih");
+        assert_eq!(auth.token, "cookie:amele_session=abc.def");
     }
 }
