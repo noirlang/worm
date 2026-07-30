@@ -173,12 +173,36 @@
   background: var(--input-bg);
   color: var(--text);
   font-weight: 900;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
 }
 
 .profile-avatar.large {
   width: 68px;
   height: 68px;
   font-size: 22px;
+}
+
+.profile-avatar.small-header {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  border: none;
+}
+
+.profile-avatar .avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.profile-avatar .avatar-fallback {
+  display: inline-grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
 }
 
 .profile-form {
