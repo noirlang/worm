@@ -297,7 +297,7 @@ function renderProfileGate(errorMessage = "") {
   const cards = state.profiles.map((profile) => `
     <button class="profile-card" data-action="profile-select" data-username="${escapeHtml(profile.username)}">
       <span class="profile-card-top">
-        <span class="profile-avatar">${profileInitials(profile)}</span>
+        ${renderProfileAvatar(profile)}
         ${profile.online ? `<span class="online-profile-mark" title="${escapeHtml(t("profile.onlineConnectedShort"))}">${icon("globe")}</span>` : ""}
       </span>
       <strong>${escapeHtml(profile.full_name || profile.username)}</strong>
@@ -424,9 +424,42 @@ function profileInitials(profile) {
     .join("") || "A";
 }
 
+function getAvatarUrl(profile) {
+  if (!profile) return "";
+  const rawUrl = profile.avatar_url || profile.avatarUrl || profile.online?.avatar_url || profile.online?.avatarUrl || "";
+  if (!rawUrl) return "";
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://") || rawUrl.startsWith("data:")) {
+    return rawUrl;
+  }
+  if (rawUrl.startsWith("/")) {
+    const base = profile.online?.apiBase || profile.online?.api_base || profile.apiBase || profile.api_base || "https://aamele-noirlang-tr.onrender.com";
+    return `${base.replace(/\/+$/, "")}${rawUrl}`;
+  }
+  return rawUrl;
+}
+
+function renderProfileAvatar(profile, extraClass = "") {
+  const avatarUrl = getAvatarUrl(profile);
+  const initials = profileInitials(profile || {});
+  const sizeClass = extraClass ? ` ${extraClass}` : "";
+  if (avatarUrl) {
+    const rawPath = (profile.avatar_url || profile.avatarUrl || profile.online?.avatar_url || profile.online?.avatarUrl || "");
+    const altBase = rawPath.startsWith("/") ? `https://amele.noirlang.tr${rawPath}` : "";
+    return `<span class="profile-avatar${sizeClass}"><img src="${escapeHtml(avatarUrl)}" alt="Avatar" class="avatar-img" data-alt-src="${escapeHtml(altBase)}" onerror="if(this.dataset.altSrc && this.src !== this.dataset.altSrc){ this.src = this.dataset.altSrc; this.dataset.altSrc = ''; } else { this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='inline-grid'; }" /><span class="avatar-fallback" style="display:none;">${initials}</span></span>`;
+  }
+  return `<span class="profile-avatar${sizeClass}">${initials}</span>`;
+}
+
 function syncProfileButton() {
   const label = document.querySelector("[data-profile-label]");
   if (label) label.textContent = state.activeProfile?.display_name || t("profile.button");
+  const button = document.querySelector(".profile-action");
+  if (button && state.activeProfile) {
+    const avatarEl = button.querySelector(".profile-avatar, [data-icon='user']");
+    if (avatarEl) {
+      avatarEl.outerHTML = renderProfileAvatar(state.activeProfile, "small-header");
+    }
+  }
 }
 
 function cachedMobileToolsAccess(profile = state.activeProfile) {
@@ -849,7 +882,7 @@ function localAccountCard(profile, state, t, icon, escapeHtml) {
     <article class="settings-card settings-primary">
       <span class="settings-kicker">${t("profile.account")}</span>
       <div class="profile-summary">
-        <span class="profile-avatar large">${profile ? profileInitials(profile) : "A"}</span>
+        ${renderProfileAvatar(profile, "large")}
         <div>
           <h3>${escapeHtml(profile?.full_name || t("profile.noActive"))}</h3>
           <p>@${escapeHtml(profile?.username || "-")}</p>
@@ -872,7 +905,7 @@ function onlineAccountCard(profile, online, state, t, icon, escapeHtml) {
     <article class="settings-card settings-primary">
       <span class="settings-kicker">${t("profile.onlineAccount")}</span>
       <div class="profile-summary">
-        <span class="profile-avatar large">${profileInitials({ full_name: onlineName, username: online.username })}</span>
+        ${renderProfileAvatar(profile || { full_name: onlineName, username: online.username, online }, "large")}
         <div>
           <h3>${escapeHtml(onlineName || t("profile.noActive"))}</h3>
           <p>@${escapeHtml(online.username || profile?.username || "-")}</p>
