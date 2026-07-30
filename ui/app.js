@@ -261,7 +261,7 @@ async function loadProfiles() {
     if (state.activeProfile) {
       setLanguage(state.activeProfile.language === "en" ? "en" : "tr");
       setTheme(state.activeProfile.theme === "light" ? "light" : "dark");
-      await refreshMobileToolsAccess({ silent: true });
+      state.mobileToolsAccess = cachedMobileToolsAccess(state.activeProfile);
       hideProfileGate();
     } else {
       state.mobileToolsAccess = { allowed: false, reason: "" };
@@ -429,6 +429,21 @@ function syncProfileButton() {
   if (label) label.textContent = state.activeProfile?.display_name || t("profile.button");
 }
 
+function cachedMobileToolsAccess(profile = state.activeProfile) {
+  const online = profile?.online;
+  const licenses = Array.isArray(online?.licenses) ? online.licenses : [];
+  const hasMobileLicense = licenses.some((license) => (
+    String(license?.status || "").toLowerCase() === "active"
+    && String(license?.plan || "").toLowerCase().replace(/[_\s]+/g, "-") === "mobile-tools"
+  ));
+  const allowed = Boolean(online?.mobile_tools_enabled || hasMobileLicense);
+  return {
+    allowed,
+    reason: allowed ? "" : "",
+    profile
+  };
+}
+
 async function selectProfile(username) {
   const openDirectly = Boolean(document.querySelector("#profile-open-directly")?.checked);
   const result = await apiRequest("/api/profiles/select", {
@@ -436,10 +451,15 @@ async function selectProfile(username) {
     body: JSON.stringify({ username, open_directly: openDirectly })
   });
   state.activeProfile = result.profile;
+  if (result.access) {
+    state.mobileToolsAccess = result.access;
+  }
   upsertProfile(result.profile);
   setLanguage(state.activeProfile.language === "en" ? "en" : "tr");
   setTheme(state.activeProfile.theme === "light" ? "light" : "dark");
-  await refreshMobileToolsAccess({ silent: true });
+  if (!result.access) {
+    await refreshMobileToolsAccess({ silent: true });
+  }
   hideProfileGate();
   syncProfileButton();
   await loadPersistedSettings();

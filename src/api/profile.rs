@@ -60,6 +60,7 @@ pub fn profile_create_endpoint(body: &[u8]) -> Response {
     ) {
         Ok(profile) => json_ok(json!({
             "profile": profile,
+            "access": crate::profile::mobile_tools_access(),
             "settings_path": crate::settings::default_settings_path(),
             "case_base_dir": crate::api::default_case_base_dir(),
         })),
@@ -78,6 +79,7 @@ pub fn profile_select_endpoint(body: &[u8]) -> Response {
     {
         Ok(profile) => json_ok(json!({
             "profile": profile,
+            "access": crate::profile::mobile_tools_access(),
             "settings_path": crate::settings::default_settings_path(),
             "case_base_dir": crate::api::default_case_base_dir(),
         })),
