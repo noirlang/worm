@@ -514,12 +514,16 @@ pub fn require_mobile_tools_access() -> AmeleResult<()> {
         .map_err(|_| AmeleError::new(HataKodu::YetkisizErisim, mobile_tools_required_message()))?;
     let session_user = online_fetch_session(&token)?;
     ensure_session_matches_profile(&session_user, online)?;
-    if online_user_unlocks_mobile_tools(&session_user) {
+    if online_user_unlocks_mobile_tools(&session_user, &[]) {
+        return Ok(());
+    }
+    let licenses = online_fetch_licenses(&token)?;
+    if online_user_unlocks_mobile_tools(&session_user, &licenses) {
         return Ok(());
     }
     Err(AmeleError::new(
         HataKodu::YetkisizErisim,
-        "Bu online hesabın Android/iOS araçları için gerekli rolü yok.",
+        "Bu online hesapta aktif Mobile Tools lisansı yok.",
     ))
 }
 
@@ -754,6 +758,8 @@ struct OnlineUserResponse {
     roles: Vec<String>,
     #[serde(default)]
     has_license: bool,
+    #[serde(default)]
+    has_mobile_tools: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1051,7 +1057,7 @@ fn online_profile_from_user(
         user.roles
     };
     let has_active_license = licenses.iter().any(|license| license.status == "active");
-    let mobile_tools_enabled = !roles.is_empty() || user.has_license || has_active_license;
+    let mobile_tools_enabled = user.has_mobile_tools || has_active_mobile_tools_license(&licenses);
     OnlineProfile {
         user_id: user.id,
         username: user.username,
@@ -1094,19 +1100,26 @@ fn worked_case_types_from_log(log: &[ProfileActivityLog]) -> Vec<String> {
 }
 
 fn online_profile_unlocks_mobile_tools(online: &OnlineProfile) -> bool {
-    online.mobile_tools_enabled
-        && online.roles.iter().any(|role| {
-            role == "member"
-                || role.ends_with("maintainer")
-                || role == "developer"
-                || role == "bdfl"
-        })
+    online.mobile_tools_enabled || has_active_mobile_tools_license(&online.licenses)
 }
 
-fn online_user_unlocks_mobile_tools(user: &OnlineUserResponse) -> bool {
-    user.roles.iter().any(|role| {
-        role == "member" || role.ends_with("maintainer") || role == "developer" || role == "bdfl"
-    })
+fn online_user_unlocks_mobile_tools(
+    user: &OnlineUserResponse,
+    licenses: &[OnlineLicenseSummary],
+) -> bool {
+    user.has_mobile_tools || has_active_mobile_tools_license(licenses)
+}
+
+fn has_active_mobile_tools_license(licenses: &[OnlineLicenseSummary]) -> bool {
+    licenses
+        .iter()
+        .any(|license| is_active_mobile_tools_license(&license.plan, &license.status))
+}
+
+fn is_active_mobile_tools_license(plan: &str, status: &str) -> bool {
+    let plan = plan.trim().to_ascii_lowercase().replace(['_', ' '], "-");
+    let status = status.trim().to_ascii_lowercase();
+    plan == "mobile-tools" && status == "active"
 }
 
 fn ensure_session_matches_profile(
@@ -1123,7 +1136,7 @@ fn ensure_session_matches_profile(
 }
 
 fn mobile_tools_required_message() -> &'static str {
-    "Android ve iOS araçlarını kullanmak için online üyelikle giriş yapın."
+    "Android ve iOS araçlarını kullanmak için Mobile Tools lisanslı online hesapla giriş yapın."
 }
 
 fn value_to_display_string(value: &Value) -> String {
@@ -1231,7 +1244,7 @@ mod tests {
     }
 
     #[test]
-    fn online_member_role_unlocks_mobile_tools() {
+    fn online_member_role_without_mobile_license_does_not_unlock_mobile_tools() {
         let online = OnlineProfile {
             user_id: "1".to_string(),
             username: "melih".to_string(),
@@ -1244,10 +1257,52 @@ mod tests {
             linked_at: "2026-01-01 00:00:00".to_string(),
             last_sync_at: "2026-01-01 00:00:00".to_string(),
             worked_case_types: Vec::new(),
-            mobile_tools_enabled: true,
+            mobile_tools_enabled: false,
+        };
+
+        assert!(!online_profile_unlocks_mobile_tools(&online));
+    }
+
+    #[test]
+    fn active_mobile_tools_license_unlocks_mobile_tools() {
+        let online = OnlineProfile {
+            user_id: "1".to_string(),
+            username: "melih".to_string(),
+            email: None,
+            first_name: "Melih".to_string(),
+            last_name: "Emik".to_string(),
+            roles: vec!["member".to_string()],
+            has_license: true,
+            licenses: vec![OnlineLicenseSummary {
+                license_key: "****1234".to_string(),
+                plan: "Mobile Tools".to_string(),
+                status: "active".to_string(),
+                created_at: "2026-01-01T00:00:00Z".to_string(),
+                expires_at: None,
+            }],
+            linked_at: "2026-01-01 00:00:00".to_string(),
+            last_sync_at: "2026-01-01 00:00:00".to_string(),
+            worked_case_types: Vec::new(),
+            mobile_tools_enabled: false,
         };
 
         assert!(online_profile_unlocks_mobile_tools(&online));
+    }
+
+    #[test]
+    fn online_user_mobile_tools_flag_unlocks_mobile_tools() {
+        let user = OnlineUserResponse {
+            id: "1".to_string(),
+            username: "melih".to_string(),
+            email: None,
+            first_name: "Melih".to_string(),
+            last_name: "Emik".to_string(),
+            roles: vec!["member".to_string()],
+            has_license: false,
+            has_mobile_tools: true,
+        };
+
+        assert!(online_user_unlocks_mobile_tools(&user, &[]));
     }
 
     #[test]

@@ -1251,7 +1251,7 @@ function requireActiveConnection(workflow, payload) {
   return true;
 }
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const externalLink = event.target.closest("a[href]");
   if (externalLink && isExternalUrl(externalLink.href)) {
     event.preventDefault();
@@ -1268,6 +1268,9 @@ document.addEventListener("click", (event) => {
 
   const routeButton = event.target.closest("[data-route]");
   if (routeButton) {
+    if (isMobileToolsRoute(routeButton.dataset.route || "")) {
+      await refreshMobileToolsAccess({ silent: true });
+    }
     setRoute(routeButton.dataset.route);
     return;
   }
