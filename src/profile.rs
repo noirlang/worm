@@ -20,6 +20,8 @@ pub struct LocalProfile {
     pub open_directly: bool,
     pub created_at: String,
     pub last_used_at: String,
+    #[serde(default, rename = "avatarUrl", alias = "avatar_url", skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub online: Option<OnlineProfile>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -35,6 +37,10 @@ pub struct OnlineProfile {
     pub email: Option<String>,
     pub first_name: String,
     pub last_name: String,
+    #[serde(default, rename = "avatarUrl", alias = "avatar_url", skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    #[serde(default, rename = "apiBase", alias = "api_base", skip_serializing_if = "Option::is_none")]
+    pub api_base: Option<String>,
     #[serde(default)]
     pub roles: Vec<String>,
     #[serde(default)]
@@ -216,6 +222,7 @@ pub fn create_profile(
         open_directly,
         created_at: now.clone(),
         last_used_at: now,
+        avatar_url: None,
         online: None,
         activity_log: Vec::new(),
     };
@@ -278,6 +285,7 @@ pub fn select_profile(username: &str, open_directly: bool) -> AmeleResult<LocalP
         };
         let worked_case_types = worked_case_types_from_log(&profile.activity_log);
         profile.online = Some(online_profile_from_user(
+            Some(api_base.clone()),
             session_user,
             licenses,
             current_online.linked_at,
@@ -390,6 +398,7 @@ pub fn link_online_profile(
         .unwrap_or_else(|| now.clone());
     let worked_case_types = worked_case_types_from_log(&existing_activity);
     let online = online_profile_from_user(
+        Some(auth.api_base.clone()),
         auth.user,
         licenses,
         linked_at,
@@ -410,9 +419,11 @@ pub fn link_online_profile(
         profile.theme = normalize_theme(theme);
         profile.open_directly = open_directly;
         profile.last_used_at = now.clone();
+        profile.avatar_url = online.avatar_url.clone();
         profile.online = Some(online);
         profile.clone()
     } else {
+        let avatar_url = online.avatar_url.clone();
         let profile = LocalProfile {
             username: local_username.clone(),
             full_name,
@@ -422,6 +433,7 @@ pub fn link_online_profile(
             open_directly,
             created_at: now.clone(),
             last_used_at: now.clone(),
+            avatar_url,
             online: Some(online),
             activity_log: Vec::new(),
         };
@@ -476,12 +488,14 @@ pub fn sync_active_online_profile() -> AmeleResult<LocalProfile> {
         if profile.username == current.username {
             let worked_case_types = worked_case_types_from_log(&profile.activity_log);
             let online = online_profile_from_user(
+                Some(api_base.clone()),
                 session_user.clone(),
                 licenses,
                 current_online.linked_at,
                 now,
                 worked_case_types,
             );
+            profile.avatar_url = online.avatar_url.clone();
             profile.online = Some(online);
             updated = Some(profile.clone());
             break;
@@ -638,12 +652,23 @@ pub fn load_profile_store() -> AmeleResult<ProfileStore> {
     }
     let content = fs::read_to_string(&path)
         .map_err(|err| AmeleError::io(HataKodu::DosyaOkuma, "Profil dosyası okunamadı", err))?;
-    serde_json::from_str(&content).map_err(|err| {
+    let mut store: ProfileStore = serde_json::from_str(&content).map_err(|err| {
         AmeleError::new(
             HataKodu::ProtokolJson,
             format!("Profil dosyası parse edilemedi: {err}"),
         )
-    })
+    })?;
+    for profile in &mut store.profiles {
+        if let Some(online) = &mut profile.online {
+            if online.api_base.is_none() {
+                online.api_base = load_online_api_base(&profile.username);
+            }
+            if profile.avatar_url.is_none() {
+                profile.avatar_url = online.avatar_url.clone();
+            }
+        }
+    }
+    Ok(store)
 }
 
 /// Profil deposunu diske yazar.
@@ -870,6 +895,8 @@ struct OnlineUserResponse {
     first_name: String,
     #[serde(default)]
     last_name: String,
+    #[serde(default)]
+    avatar_url: Option<String>,
     #[serde(default)]
     roles: Vec<String>,
     #[serde(default)]
@@ -1211,6 +1238,7 @@ fn online_request_error(context: &str, err: ureq::Error) -> AmeleError {
 }
 
 fn online_profile_from_user(
+    api_base: Option<String>,
     user: OnlineUserResponse,
     licenses: Vec<OnlineLicenseSummary>,
     linked_at: String,
@@ -1230,6 +1258,8 @@ fn online_profile_from_user(
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
+        avatar_url: user.avatar_url,
+        api_base,
         roles,
         has_license: user.has_license || has_active_license,
         licenses,
@@ -1432,6 +1462,8 @@ mod tests {
             email: None,
             first_name: "Melih".to_string(),
             last_name: "Emik".to_string(),
+            avatar_url: None,
+            api_base: None,
             roles: vec!["member".to_string()],
             has_license: false,
             licenses: Vec::new(),
@@ -1452,6 +1484,8 @@ mod tests {
             email: None,
             first_name: "Melih".to_string(),
             last_name: "Emik".to_string(),
+            avatar_url: None,
+            api_base: None,
             roles: vec!["member".to_string()],
             has_license: true,
             licenses: vec![OnlineLicenseSummary {
@@ -1478,6 +1512,7 @@ mod tests {
             email: None,
             first_name: "Melih".to_string(),
             last_name: "Emik".to_string(),
+            avatar_url: None,
             roles: vec!["member".to_string()],
             has_license: false,
             has_mobile_tools: true,
