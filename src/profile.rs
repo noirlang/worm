@@ -20,7 +20,12 @@ pub struct LocalProfile {
     pub open_directly: bool,
     pub created_at: String,
     pub last_used_at: String,
-    #[serde(default, rename = "avatarUrl", alias = "avatar_url", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "avatarUrl",
+        alias = "avatar_url",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub avatar_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub online: Option<OnlineProfile>,
@@ -37,9 +42,19 @@ pub struct OnlineProfile {
     pub email: Option<String>,
     pub first_name: String,
     pub last_name: String,
-    #[serde(default, rename = "avatarUrl", alias = "avatar_url", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "avatarUrl",
+        alias = "avatar_url",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub avatar_url: Option<String>,
-    #[serde(default, rename = "apiBase", alias = "api_base", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "apiBase",
+        alias = "api_base",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub api_base: Option<String>,
     #[serde(default)]
     pub roles: Vec<String>,
