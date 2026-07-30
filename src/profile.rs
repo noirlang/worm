@@ -263,6 +263,18 @@ pub fn select_profile(username: &str, open_directly: bool) -> AmeleResult<LocalP
     ensure_profile_dirs(&profile)?;
     ensure_profile_settings(&profile)?;
     set_active_profile(Some(profile.clone()));
+
+    if profile.online.is_some() && load_online_token(&profile.username).is_ok() {
+        match sync_active_online_profile() {
+            Ok(synced) => return Ok(synced),
+            Err(err) => crate::logging::runtime_log(
+                crate::logging::LogLevel::Debug,
+                "profile:online",
+                format!("Kayitli online profil secildi ama sessiz senkronizasyon basarisiz: {err}"),
+            ),
+        }
+    }
+
     Ok(profile)
 }
 
@@ -317,7 +329,7 @@ pub fn link_online_profile(
         ));
     }
 
-    let licenses = match online_fetch_licenses(&auth.token) {
+    let licenses = match online_fetch_licenses(Some(&auth.api_base), &auth.token) {
         Ok(licenses) => licenses,
         Err(err) => {
             crate::logging::runtime_log(
@@ -396,6 +408,7 @@ pub fn link_online_profile(
     ensure_profile_dirs(&profile)?;
     ensure_profile_settings(&profile)?;
     save_online_token(&profile.username, &auth.token)?;
+    save_online_api_base(&profile.username, &auth.api_base)?;
     store.active_username = Some(profile.username.clone());
     save_profile_store(&store)?;
     set_active_profile(Some(profile.clone()));
@@ -417,9 +430,10 @@ pub fn sync_active_online_profile() -> AmeleResult<LocalProfile> {
         ));
     };
     let token = load_online_token(&current.username)?;
-    let session_user = online_fetch_session(&token)?;
+    let api_base = load_online_api_base(&current.username);
+    let (api_base, session_user) = online_fetch_session(api_base.as_deref(), &token)?;
     ensure_session_matches_profile(&session_user, &current_online)?;
-    let licenses = match online_fetch_licenses(&token) {
+    let licenses = match online_fetch_licenses(Some(&api_base), &token) {
         Ok(licenses) => licenses,
         Err(err) => {
             crate::logging::runtime_log(
@@ -456,6 +470,7 @@ pub fn sync_active_online_profile() -> AmeleResult<LocalProfile> {
             "Aktif profil depoda bulunamadı",
         ));
     };
+    save_online_api_base(&profile.username, &api_base)?;
     save_profile_store(&store)?;
     set_active_profile(Some(profile.clone()));
     Ok(profile)
@@ -476,6 +491,7 @@ pub fn disconnect_active_online_profile() -> AmeleResult<Option<LocalProfile>> {
         }
     }
     remove_online_token(&username)?;
+    remove_online_api_base(&username)?;
     save_profile_store(&store)?;
     set_active_profile(updated.clone());
     Ok(updated)
@@ -512,13 +528,16 @@ pub fn require_mobile_tools_access() -> AmeleResult<()> {
     };
     let token = load_online_token(&profile.username)
         .map_err(|_| AmeleError::new(HataKodu::YetkisizErisim, mobile_tools_required_message()))?;
-    let session_user = online_fetch_session(&token)?;
+    let api_base = load_online_api_base(&profile.username);
+    let (api_base, session_user) = online_fetch_session(api_base.as_deref(), &token)?;
     ensure_session_matches_profile(&session_user, online)?;
     if online_user_unlocks_mobile_tools(&session_user, &[]) {
+        save_online_api_base(&profile.username, &api_base)?;
         return Ok(());
     }
-    let licenses = online_fetch_licenses(&token)?;
+    let licenses = online_fetch_licenses(Some(&api_base), &token)?;
     if online_user_unlocks_mobile_tools(&session_user, &licenses) {
+        save_online_api_base(&profile.username, &api_base)?;
         return Ok(());
     }
     Err(AmeleError::new(
@@ -653,6 +672,10 @@ fn online_token_path(username: &str) -> PathBuf {
     profile_dir_for_username(username).join("online_token")
 }
 
+fn online_api_base_path(username: &str) -> PathBuf {
+    profile_dir_for_username(username).join("online_api_base")
+}
+
 fn save_online_token(username: &str, token: &str) -> AmeleResult<()> {
     let path = online_token_path(username);
     if let Some(parent) = path.parent() {
@@ -707,17 +730,85 @@ fn remove_online_token(username: &str) -> AmeleResult<()> {
     }
 }
 
+fn save_online_api_base(username: &str, base_url: &str) -> AmeleResult<()> {
+    let path = online_api_base_path(username);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            AmeleError::io(
+                HataKodu::DosyaYazma,
+                "Online API base klasörü oluşturulamadı",
+                err,
+            )
+        })?;
+    }
+    fs::write(&path, base_url.trim()).map_err(|err| {
+        AmeleError::io(
+            HataKodu::DosyaYazma,
+            "Online API base dosyası yazılamadı",
+            err,
+        )
+    })
+}
+
+fn load_online_api_base(username: &str) -> Option<String> {
+    let value = fs::read_to_string(online_api_base_path(username)).ok()?;
+    normalize_online_api_base(&value)
+}
+
+fn remove_online_api_base(username: &str) -> AmeleResult<()> {
+    let path = online_api_base_path(username);
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(AmeleError::io(
+            HataKodu::DosyaYazma,
+            "Online API base dosyası silinemedi",
+            err,
+        )),
+    }
+}
+
 fn online_api_base_url() -> String {
     std::env::var("AMELE_ONLINE_API_BASE")
         .ok()
-        .map(|value| value.trim().trim_end_matches('/').to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "https://amele.noirlang.tr".to_string())
+        .and_then(|value| normalize_online_api_base(&value))
+        .unwrap_or_else(default_online_api_base_url)
 }
 
-fn online_origin() -> String {
-    origin_from_url(&online_api_base_url())
-        .unwrap_or_else(|| "https://amele.noirlang.tr".to_string())
+fn online_api_base_candidates(preferred: Option<&str>) -> Vec<String> {
+    let mut candidates = Vec::new();
+    if let Some(preferred) = preferred.and_then(normalize_online_api_base) {
+        candidates.push(preferred);
+    }
+    if let Ok(value) = std::env::var("AMELE_ONLINE_API_BASE") {
+        if let Some(value) = normalize_online_api_base(&value) {
+            candidates.push(value);
+        }
+    }
+    candidates.push(default_online_api_base_url());
+    candidates.push("https://amele.noirlang.tr".to_string());
+    candidates.push("https://www.amele.noirlang.tr".to_string());
+
+    let mut unique = Vec::new();
+    for candidate in candidates {
+        if !unique.iter().any(|value| value == &candidate) {
+            unique.push(candidate);
+        }
+    }
+    unique
+}
+
+fn default_online_api_base_url() -> String {
+    "https://aamele-noirlang-tr.onrender.com".to_string()
+}
+
+fn normalize_online_api_base(value: &str) -> Option<String> {
+    let value = value.trim().trim_end_matches('/').to_string();
+    if value.is_empty() || origin_from_url(&value).is_none() {
+        None
+    } else {
+        Some(value)
+    }
 }
 
 fn origin_from_url(url: &str) -> Option<String> {
@@ -738,6 +829,7 @@ const COOKIE_CREDENTIAL_PREFIX: &str = "cookie:";
 
 #[derive(Debug)]
 struct OnlineAuthResponse {
+    api_base: String,
     user: OnlineUserResponse,
     token: String,
 }
@@ -788,25 +880,66 @@ fn online_login(identifier: &str, password: &str) -> AmeleResult<OnlineAuthRespo
         "identifier": identifier.trim(),
         "password": password,
     });
-    let url = format!("{}/api/auth/login", online_api_base_url());
-    let response = online_post_json_with_session_cookie(&url, None, &payload)?;
-    parse_online_auth_response(response.value, response.session_cookie)
-}
-
-fn online_fetch_session(token: &str) -> AmeleResult<OnlineUserResponse> {
-    let url = format!("{}/api/auth/session", online_api_base_url());
-    let value = online_get_json(&url, Some(token))?;
-    parse_optional_online_user(&value, "Online oturum cevabı parse edilemedi")?.ok_or_else(|| {
+    let mut last_error = None;
+    for api_base in online_api_base_candidates(None) {
+        let url = format!("{api_base}/api/auth/login");
+        match online_post_json_with_session_cookie(&api_base, &url, None, &payload) {
+            Ok(response) => {
+                let mut auth = parse_online_auth_response(response.value, response.session_cookie)?;
+                auth.api_base = api_base;
+                return Ok(auth);
+            }
+            Err(err) => last_error = Some(err),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| {
         AmeleError::new(
-            HataKodu::YetkisizErisim,
-            "Online oturum geçersiz. Yeniden giriş yapın.",
+            HataKodu::Baglanti,
+            "Online API adresi bulunamadı. AMELE_ONLINE_API_BASE değerini kontrol edin.",
         )
-    })
+    }))
 }
 
-fn online_fetch_licenses(token: &str) -> AmeleResult<Vec<OnlineLicenseSummary>> {
-    let url = format!("{}/api/licenses/my", online_api_base_url());
-    let value = online_get_json_connection_close(&url, Some(token))?;
+fn online_fetch_session(
+    preferred_api_base: Option<&str>,
+    token: &str,
+) -> AmeleResult<(String, OnlineUserResponse)> {
+    let mut last_error = None;
+    for api_base in online_api_base_candidates(preferred_api_base) {
+        let url = format!("{api_base}/api/auth/session");
+        match online_get_json(&api_base, &url, Some(token)) {
+            Ok(value) => {
+                let Some(user) =
+                    parse_optional_online_user(&value, "Online oturum cevabı parse edilemedi")?
+                else {
+                    last_error = Some(AmeleError::new(
+                        HataKodu::YetkisizErisim,
+                        "Online oturum geçersiz. Yeniden giriş yapın.",
+                    ));
+                    continue;
+                };
+                return Ok((api_base, user));
+            }
+            Err(err) => last_error = Some(err),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| {
+        AmeleError::new(
+            HataKodu::Baglanti,
+            "Online API adresi bulunamadı. AMELE_ONLINE_API_BASE değerini kontrol edin.",
+        )
+    }))
+}
+
+fn online_fetch_licenses(
+    preferred_api_base: Option<&str>,
+    token: &str,
+) -> AmeleResult<Vec<OnlineLicenseSummary>> {
+    let api_base = preferred_api_base
+        .and_then(normalize_online_api_base)
+        .unwrap_or_else(online_api_base_url);
+    let url = format!("{api_base}/api/licenses/my");
+    let value = online_get_json_connection_close(&api_base, &url, Some(token))?;
     let envelope: OnlineLicensesEnvelope = serde_json::from_value(response_payload(&value).clone())
         .map_err(|err| {
             AmeleError::new(
@@ -827,18 +960,22 @@ fn online_fetch_licenses(token: &str) -> AmeleResult<Vec<OnlineLicenseSummary>> 
         .collect())
 }
 
-fn online_get_json(url: &str, bearer: Option<&str>) -> AmeleResult<Value> {
+fn online_get_json(api_base: &str, url: &str, bearer: Option<&str>) -> AmeleResult<Value> {
     let agent = online_agent();
-    let request = apply_online_headers(agent.get(url), bearer);
+    let request = apply_online_headers(agent.get(url), api_base, bearer);
     let response = request
         .call()
         .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
     parse_online_response(response).map(|response| response.value)
 }
 
-fn online_get_json_connection_close(url: &str, bearer: Option<&str>) -> AmeleResult<Value> {
+fn online_get_json_connection_close(
+    api_base: &str,
+    url: &str,
+    bearer: Option<&str>,
+) -> AmeleResult<Value> {
     let agent = online_agent();
-    let request = apply_online_headers(agent.get(url), bearer).set("Connection", "close");
+    let request = apply_online_headers(agent.get(url), api_base, bearer).set("Connection", "close");
     let response = request
         .call()
         .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
@@ -846,13 +983,14 @@ fn online_get_json_connection_close(url: &str, bearer: Option<&str>) -> AmeleRes
 }
 
 fn online_post_json_with_session_cookie(
+    api_base: &str,
     url: &str,
     bearer: Option<&str>,
     payload: &Value,
 ) -> AmeleResult<OnlineJsonResponse> {
     let agent = online_agent();
-    let request =
-        apply_online_headers(agent.post(url), bearer).set("Content-Type", "application/json");
+    let request = apply_online_headers(agent.post(url), api_base, bearer)
+        .set("Content-Type", "application/json");
     let response = request
         .send_string(&payload.to_string())
         .map_err(|err| online_request_error("Online API isteği başarısız", err))?;
@@ -871,13 +1009,13 @@ fn online_agent() -> ureq::Agent {
         .build()
 }
 
-fn apply_online_headers(request: ureq::Request, bearer: Option<&str>) -> ureq::Request {
-    let origin = online_origin();
-    let referer = format!("{origin}/");
+fn apply_online_headers(
+    request: ureq::Request,
+    _api_base: &str,
+    bearer: Option<&str>,
+) -> ureq::Request {
     let request = request
         .set("Accept", "application/json")
-        .set("Origin", &origin)
-        .set("Referer", &referer)
         .set("User-Agent", concat!("Amele/", env!("CARGO_PKG_VERSION")));
     if let Some(credential) = bearer {
         if let Some(cookie) = credential.strip_prefix(COOKIE_CREDENTIAL_PREFIX) {
@@ -933,7 +1071,11 @@ fn parse_online_auth_response(
             )
         })?;
 
-    Ok(OnlineAuthResponse { user, token })
+    Ok(OnlineAuthResponse {
+        api_base: String::new(),
+        user,
+        token,
+    })
 }
 
 fn parse_required_online_user(value: &Value, context: &str) -> AmeleResult<OnlineUserResponse> {
