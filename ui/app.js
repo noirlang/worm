@@ -370,6 +370,10 @@ function onlineProfileFormHtml() {
   const draftTheme = draft.theme || state.theme;
   return `
     <div class="profile-form">
+      <div class="info-panel profile-notice">
+        ${icon("info")}
+        <p>${t("profile.onlineNotice")}</p>
+      </div>
       ${field(t("settings.language"), `
         <select id="profile-language" class="select">
           <option value="tr" ${draftLanguage === "tr" ? "selected" : ""}>Türkçe</option>

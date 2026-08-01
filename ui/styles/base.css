@@ -2180,3 +2180,28 @@ svg.svg-fill path {
     bottom: 16px;
   }
 }
+
+.info-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.info-panel svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 1px;
+}
+
+.info-panel p {
+  margin: 0;
+}
