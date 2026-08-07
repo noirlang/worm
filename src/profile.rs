@@ -849,9 +849,8 @@ fn online_api_base_candidates(preferred: Option<&str>) -> Vec<String> {
             candidates.push(value);
         }
     }
-    candidates.push(default_online_api_base_url());
     candidates.push("https://amele.noirlang.tr".to_string());
-    candidates.push("https://www.amele.noirlang.tr".to_string());
+    candidates.push(default_online_api_base_url());
 
     let mut unique = Vec::new();
     for candidate in candidates {
@@ -867,7 +866,11 @@ fn default_online_api_base_url() -> String {
 }
 
 fn normalize_online_api_base(value: &str) -> Option<String> {
-    let value = value.trim().trim_end_matches('/').to_string();
+    let mut value = value.trim().trim_end_matches('/').to_string();
+    if !value.starts_with("http://") && !value.starts_with("https://") {
+        value = format!("https://{value}");
+    }
+    let value = value.replace("://www.amele.noirlang.tr", "://amele.noirlang.tr");
     if value.is_empty() || origin_from_url(&value).is_none() {
         None
     } else {
@@ -1071,7 +1074,7 @@ struct OnlineJsonResponse {
 
 fn online_agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(12))
+        .timeout(Duration::from_secs(20))
         .build()
 }
 
