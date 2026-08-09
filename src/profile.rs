@@ -277,37 +277,65 @@ pub fn select_profile(username: &str, open_directly: bool) -> AmeleResult<LocalP
     profile.open_directly = open_directly;
 
     if let Some(current_online) = profile.online.clone() {
-        let token = load_online_token(&profile.username).map_err(|_| {
-            AmeleError::new(
-                HataKodu::TokenGecersiz,
-                "Online profil oturumu bulunamadı; tekrar giriş yapın.",
-            )
-        })?;
-        let api_base = load_online_api_base(&profile.username);
-        let (api_base, session_user) = online_fetch_session(api_base.as_deref(), &token)
-            .map_err(online_profile_select_error)?;
-        ensure_session_matches_profile(&session_user, &current_online)?;
-        let licenses = match online_fetch_licenses(Some(&api_base), &token) {
-            Ok(licenses) => licenses,
+        match load_online_token(&profile.username) {
+            Ok(token) => {
+                let api_base = load_online_api_base(&profile.username);
+                match online_fetch_session(api_base.as_deref(), &token) {
+                    Ok((api_base, session_user)) => {
+                        if let Err(err) =
+                            ensure_session_matches_profile(&session_user, &current_online)
+                        {
+                            crate::logging::runtime_log(
+                                crate::logging::LogLevel::Warn,
+                                "profile:online",
+                                format!("Online profil eşleşmedi: {err}"),
+                            );
+                        } else {
+                            let licenses = match online_fetch_licenses(Some(&api_base), &token) {
+                                Ok(licenses) => licenses,
+                                Err(err) => {
+                                    crate::logging::runtime_log(
+                                        crate::logging::LogLevel::Debug,
+                                        "profile:online",
+                                        format!(
+                                            "Online profil seçilirken lisanslar senkronlanamadı: {err}"
+                                        ),
+                                    );
+                                    Vec::new()
+                                }
+                            };
+                            let worked_case_types =
+                                worked_case_types_from_log(&profile.activity_log);
+                            profile.online = Some(online_profile_from_user(
+                                Some(api_base.clone()),
+                                session_user,
+                                licenses,
+                                current_online.linked_at,
+                                now.clone(),
+                                worked_case_types,
+                            ));
+                            let _ = save_online_api_base(&profile.username, &api_base);
+                        }
+                    }
+                    Err(err) => {
+                        crate::logging::runtime_log(
+                            crate::logging::LogLevel::Warn,
+                            "profile:online",
+                            format!(
+                                "Profil seçilirken online oturum senkronlanamadı ({username}): {err}"
+                            ),
+                        );
+                    }
+                }
+            }
             Err(err) => {
                 crate::logging::runtime_log(
                     crate::logging::LogLevel::Debug,
                     "profile:online",
-                    format!("Online profil secilirken lisanslar senkronlanamadi: {err}"),
+                    format!("Online profil tokeni okunamadı ({username}): {err}"),
                 );
-                Vec::new()
             }
-        };
-        let worked_case_types = worked_case_types_from_log(&profile.activity_log);
-        profile.online = Some(online_profile_from_user(
-            Some(api_base.clone()),
-            session_user,
-            licenses,
-            current_online.linked_at,
-            now.clone(),
-            worked_case_types,
-        ));
-        save_online_api_base(&profile.username, &api_base)?;
+        }
     }
 
     for existing in &mut store.profiles {
@@ -579,23 +607,61 @@ pub fn require_mobile_tools_access() -> AmeleResult<()> {
             mobile_tools_required_message(),
         ));
     };
-    let token = load_online_token(&profile.username)
-        .map_err(|_| AmeleError::new(HataKodu::YetkisizErisim, mobile_tools_required_message()))?;
-    let api_base = load_online_api_base(&profile.username);
-    let (api_base, session_user) = online_fetch_session(api_base.as_deref(), &token)?;
-    ensure_session_matches_profile(&session_user, online)?;
-    if online_user_unlocks_mobile_tools(&session_user, &[]) {
-        save_online_api_base(&profile.username, &api_base)?;
+
+    let cached_allowed = online_profile_unlocks_mobile_tools(online);
+
+    if let Ok(token) = load_online_token(&profile.username) {
+        let api_base = load_online_api_base(&profile.username);
+        if let Ok((api_base, session_user)) = online_fetch_session(api_base.as_deref(), &token) {
+            if ensure_session_matches_profile(&session_user, online).is_ok() {
+                let licenses = online_fetch_licenses(Some(&api_base), &token).unwrap_or_default();
+                let now = now_string();
+                let worked_case_types = worked_case_types_from_log(&profile.activity_log);
+                let updated_online = online_profile_from_user(
+                    Some(api_base.clone()),
+                    session_user,
+                    licenses,
+                    online.linked_at.clone(),
+                    now,
+                    worked_case_types,
+                );
+                let _ = save_online_api_base(&profile.username, &api_base);
+                let allowed = online_profile_unlocks_mobile_tools(&updated_online);
+                if let Ok(mut store) = load_profile_store() {
+                    for p in &mut store.profiles {
+                        if p.username == profile.username {
+                            p.avatar_url = updated_online.avatar_url.clone();
+                            p.online = Some(updated_online.clone());
+                            break;
+                        }
+                    }
+                    let _ = save_profile_store(&store);
+                    set_active_profile(
+                        store
+                            .profiles
+                            .into_iter()
+                            .find(|p| p.username == profile.username),
+                    );
+                }
+                if allowed {
+                    return Ok(());
+                } else {
+                    return Err(AmeleError::new(
+                        HataKodu::YetkisizErisim,
+                        "Bu online hesapta aktif Mobile Tools lisansı yok.",
+                    ));
+                }
+            }
+        }
+    }
+
+    if cached_allowed {
         return Ok(());
     }
-    let licenses = online_fetch_licenses(Some(&api_base), &token)?;
-    if online_user_unlocks_mobile_tools(&session_user, &licenses) {
-        save_online_api_base(&profile.username, &api_base)?;
-        return Ok(());
-    }
+
     Err(AmeleError::new(
         HataKodu::YetkisizErisim,
-        "Bu online hesapta aktif Mobile Tools lisansı yok.",
+        mobile_tools_required_message(),
     ))
 }
 
@@ -1317,6 +1383,7 @@ fn online_profile_unlocks_mobile_tools(online: &OnlineProfile) -> bool {
     online.mobile_tools_enabled || has_active_mobile_tools_license(&online.licenses)
 }
 
+#[cfg(test)]
 fn online_user_unlocks_mobile_tools(
     user: &OnlineUserResponse,
     licenses: &[OnlineLicenseSummary],
@@ -1347,21 +1414,6 @@ fn ensure_session_matches_profile(
         ));
     }
     Ok(())
-}
-
-fn online_profile_select_error(err: AmeleError) -> AmeleError {
-    if matches!(
-        err.code,
-        HataKodu::Baglanti | HataKodu::BaglantiZamanAsimi | HataKodu::BaglantiKesildi
-    ) {
-        return AmeleError::new(
-            HataKodu::Baglanti,
-            format!(
-                "Online profil seçilemedi: internet bağlantısı yok veya online API erişilemiyor. {err}"
-            ),
-        );
-    }
-    err
 }
 
 fn mobile_tools_required_message() -> &'static str {
@@ -1603,5 +1655,24 @@ mod tests {
 
         assert_eq!(auth.user.username, "melih");
         assert_eq!(auth.token, "cookie:amele_session=abc.def");
+    }
+
+    #[test]
+    fn parse_optional_online_user_returns_none_when_user_is_null_or_missing() {
+        let value = serde_json::json!({
+            "user": null
+        });
+        assert!(
+            parse_optional_online_user(&value, "context")
+                .unwrap()
+                .is_none()
+        );
+
+        let value_empty = serde_json::json!({});
+        assert!(
+            parse_optional_online_user(&value_empty, "context")
+                .unwrap()
+                .is_none()
+        );
     }
 }

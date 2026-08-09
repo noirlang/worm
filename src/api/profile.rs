@@ -83,7 +83,14 @@ pub fn profile_select_endpoint(body: &[u8]) -> Response {
             "settings_path": crate::settings::default_settings_path(),
             "case_base_dir": crate::api::default_case_base_dir(),
         })),
-        Err(err) => json_error(404, err.to_string()),
+        Err(err) => {
+            let status = match err.code {
+                crate::HataKodu::IcerikGecersiz => 404,
+                crate::HataKodu::YetkisizErisim | crate::HataKodu::TokenGecersiz => 401,
+                _ => 500,
+            };
+            json_error(status, err.to_string())
+        }
     }
 }
 

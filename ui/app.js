@@ -613,18 +613,18 @@ function upsertProfile(profile) {
 
 async function refreshMobileToolsAccess({ silent = false } = {}) {
   if (!backendReady() || !state.activeProfile) {
-    state.mobileToolsAccess = { allowed: false, reason: "" };
+    state.mobileToolsAccess = cachedMobileToolsAccess(state.activeProfile);
     return state.mobileToolsAccess;
   }
   try {
     const result = await apiRequest("/api/profiles/mobile-access");
-    state.mobileToolsAccess = result.access || { allowed: false, reason: "" };
+    state.mobileToolsAccess = result.access || cachedMobileToolsAccess(state.activeProfile);
     if (result.access?.profile) {
       state.activeProfile = result.access.profile;
       upsertProfile(result.access.profile);
     }
   } catch (error) {
-    state.mobileToolsAccess = { allowed: false, reason: error.message || "" };
+    state.mobileToolsAccess = cachedMobileToolsAccess(state.activeProfile);
     if (!silent) showToast(error.message, "error");
   }
   return state.mobileToolsAccess;
