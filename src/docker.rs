@@ -217,7 +217,8 @@ pub fn check_docker_status(custom_root: Option<&Path>) -> DockerSystemStatus {
     };
 
     let message = if permission_denied {
-        "Docker dizinine (/var/lib/docker) erişim izni yok. Root / sudo yetkisi gerekebilir.".to_string()
+        "Docker dizinine (/var/lib/docker) erişim izni yok. Root / sudo yetkisi gerekebilir."
+            .to_string()
     } else if is_custom {
         format!(
             "Bağlanmış disk imajından Docker dizini tarandı ({})",
