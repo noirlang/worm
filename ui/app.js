@@ -669,8 +669,26 @@ function mobileToolsLockedPage({ t, icon, pageTitle }) {
 function render() {
   if (state.isDevConsole) return;
   const activeGroup = routeGroup(state.route);
+  const mobileAllowed = onlineMobileToolsAllowed();
+
   document.querySelectorAll("[data-route]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.route === activeGroup);
+    const r = button.dataset.route;
+    button.classList.toggle("active", r === activeGroup);
+
+    if (r === "android" || r === "ios") {
+      button.classList.toggle("is-locked", !mobileAllowed);
+      button.classList.toggle("is-unlocked", mobileAllowed);
+
+      let lockBadge = button.querySelector(".route-lock-badge");
+      if (!lockBadge) {
+        lockBadge = document.createElement("span");
+        lockBadge.className = "route-lock-badge";
+        button.appendChild(lockBadge);
+      }
+      lockBadge.innerHTML = icon(mobileAllowed ? "unlock" : "lock");
+      lockBadge.className = `route-lock-badge ${mobileAllowed ? "unlocked" : "locked"}`;
+      lockBadge.title = mobileAllowed ? "Yetkili (Mobile Tools)" : "Kilitli (Yetki / Lisans Gerekli)";
+    }
   });
 
   const boundCasePanel = (subdir, hint) => casePanel(subdir, hint, {
