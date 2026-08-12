@@ -682,7 +682,13 @@ function render() {
     if (r === "android" || r === "ios") {
       button.classList.toggle("is-locked", !mobileAllowed);
       button.classList.toggle("is-unlocked", mobileAllowed);
-      button.setAttribute("title", mobileAllowed ? "Yetkili (Mobile Tools)" : "Kilitli (Yetki / Lisans Gerekli)");
+      button.removeAttribute("title");
+
+      const indicator = button.querySelector(".nav-lock-indicator");
+      if (indicator) {
+        indicator.innerHTML = icon(mobileAllowed ? "unlock" : "lock");
+        indicator.className = `nav-lock-indicator ${mobileAllowed ? "unlocked" : "locked"}`;
+      }
     }
   });
 
@@ -1351,9 +1357,6 @@ document.addEventListener("click", async (event) => {
 
   const routeButton = event.target.closest("[data-route]");
   if (routeButton) {
-    if (isMobileToolsRoute(routeButton.dataset.route || "")) {
-      await refreshMobileToolsAccess({ silent: true });
-    }
     setRoute(routeButton.dataset.route);
     return;
   }

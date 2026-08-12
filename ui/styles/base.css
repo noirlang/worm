@@ -2319,10 +2319,38 @@ html, body {
   transform: translate3d(0, 0, 0) !important;
 }
 
-/* Sleek Lock & Unlock Indicators */
-.nav-item,
-.action-tile {
+/* Sleek SVG Lock & Unlock Indicators */
+.nav-item {
   position: relative;
+}
+
+.nav-lock-indicator {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 220ms ease;
+}
+
+.nav-lock-indicator svg {
+  width: 13px;
+  height: 13px;
+}
+
+.nav-lock-indicator.locked {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.nav-lock-indicator.unlocked {
+  color: #44e6d0;
+  background: rgba(68, 230, 208, 0.14);
+  border: 1px solid rgba(68, 230, 208, 0.4);
 }
 
 .nav-item.is-locked,
@@ -2337,42 +2365,4 @@ html, body {
 .action-tile.is-locked:hover {
   transform: none !important;
   box-shadow: none !important;
-}
-
-.nav-item.is-locked::after {
-  content: "🔒";
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  transform: translateY(-50%);
-  font-size: 13px;
-  opacity: 0.75;
-}
-
-.action-tile.is-locked::after {
-  content: "🔒";
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  font-size: 15px;
-  opacity: 0.75;
-}
-
-.nav-item.is-unlocked::after {
-  content: "🔓";
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  transform: translateY(-50%);
-  font-size: 13px;
-  opacity: 0.85;
-}
-
-.action-tile.is-unlocked::after {
-  content: "🔓";
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  font-size: 15px;
-  opacity: 0.85;
 }
