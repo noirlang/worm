@@ -9,4 +9,6 @@ agent.md
 __pycache__/
 *.pyc
 /test-qemu
+/test-vm
+*.qcow2
 
