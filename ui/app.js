@@ -1,5 +1,6 @@
 import { androidModePage, androidPage, handleAndroidAction, syncAndroidDeviceSelection } from "./android.js";
 import { iosPage, handleIosAction, syncIosBackupPathInput } from "./ios.js";
+import { dockerPage, handleDockerAction } from "./docker.js";
 import { createApiRequest } from "./core/api.js";
 import { errorBoxHtml } from "./core/errors.js";
 import { detectPlatform, platformLabel as platformName } from "./core/platform.js";
@@ -780,8 +781,9 @@ function toolHub(platform) {
       (card) => {
         const workflow = workflows[card.id];
         const blocked = workflow && isLocalWorkflowBlocked(workflow);
+        const targetRoute = card.route || `workflow:${card.id}`;
         return `
-        <button class="forensic-card ${blocked ? "is-disabled" : ""}" data-route="workflow:${card.id}" style="--accent:${card.accent}" ${blocked ? `aria-disabled="true" data-disabled-reason="${workflow.platform}"` : ""}>
+        <button class="forensic-card ${blocked ? "is-disabled" : ""}" data-route="${targetRoute}" style="--accent:${card.accent}" ${blocked ? `aria-disabled="true" data-disabled-reason="${workflow.platform}"` : ""}>
           <span class="card-icon">${icon(card.icon)}</span>
           <h3>${localizeText(card.title)}</h3>
           <p>${localizeText(card.desc)}</p>
@@ -843,6 +845,7 @@ const routes = {
   linux: () => toolHub("linux"),
   android: () => androidPage({ t, icon, pageTitle, state, escapeHtml, backendReady }),
   ios: () => "",
+  docker: () => dockerPage({ t, icon, state, pageTitle, escapeHtml, backendReady }),
   agent: agentPage,
   analysis: analysisPage,
   profile: profilePage,
@@ -1346,6 +1349,12 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const dockerButton = event.target.closest("[data-docker-action]");
+  if (dockerButton) {
+    await handleDockerAction(event, { apiRequest, setRoute, render });
+    return;
+  }
+
   const tabButton = event.target.closest("[data-tab]");
   if (tabButton) {
     state.activeTab = tabButton.dataset.tab;
@@ -1532,6 +1541,10 @@ document.addEventListener("input", (event) => {
   const iosBackupPath = event.target.closest("#ios-backup-path");
   if (iosBackupPath) {
     syncIosBackupPathInput(iosBackupPath, state);
+  }
+  const dockerSearch = event.target.closest("[data-docker-action='search']");
+  if (dockerSearch) {
+    handleDockerAction(event, { apiRequest, setRoute, render });
   }
 });
 

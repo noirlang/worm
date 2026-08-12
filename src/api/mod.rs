@@ -3,6 +3,7 @@ pub mod acquisition_control;
 pub mod android;
 pub mod desktop;
 pub mod developer;
+pub mod docker;
 pub mod evidence;
 pub mod hash_api;
 mod helpers;

@@ -76,6 +76,15 @@ export const toolCards = {
       icon: "chip",
       accent: "var(--text)",
       badge: L("Root gerekli", "Root required")
+    },
+    {
+      id: "docker-tools",
+      route: "docker",
+      title: L("Docker Konteyner Adli Bilişimi", "Docker Container Forensics"),
+      desc: L("Overlay2 drift katmanı, konfigürasyon, log ve kaçış riski analizi.", "Overlay2 drift layer, config, logs and escape risk analysis."),
+      icon: "docker",
+      accent: "var(--text)",
+      badge: "Overlay2 + DFIR"
     }
   ]
 };

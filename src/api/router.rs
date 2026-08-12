@@ -2,7 +2,7 @@
 use crate::server::{Response, json_error, json_ok};
 
 use super::{
-    acquisition_control, android, desktop, developer, evidence, hash_api, ios, profile, ram,
+    acquisition_control, android, desktop, developer, docker, evidence, hash_api, ios, profile, ram,
     settings, system, update, wireguard,
 };
 
@@ -551,6 +551,26 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
             );
             update::update_install_endpoint(body)
         }
+        ("GET", "/api/docker-status") => docker::docker_status_endpoint(None),
+        ("POST", "/api/docker-status") => {
+            let custom_root = serde_json::from_slice::<serde_json::Value>(body)
+                .ok()
+                .and_then(|v| v.get("custom_docker_root").and_then(|s| s.as_str()).map(str::to_string));
+            docker::docker_status_endpoint(custom_root.as_deref())
+        }
+        ("GET", "/api/docker-containers") => docker::docker_containers_endpoint(None),
+        ("POST", "/api/docker-containers") => {
+            let custom_root = serde_json::from_slice::<serde_json::Value>(body)
+                .ok()
+                .and_then(|v| v.get("custom_docker_root").and_then(|s| s.as_str()).map(str::to_string));
+            docker::docker_containers_endpoint(custom_root.as_deref())
+        }
+        ("POST", "/api/docker-logs") => docker::docker_logs_endpoint(body),
+        ("POST", "/api/docker-acquire-local") => docker::docker_acquire_local_endpoint(body),
+        ("POST", "/api/docker-remote-status") => docker::docker_remote_status_endpoint(body),
+        ("POST", "/api/docker-remote-containers") => docker::docker_remote_containers_endpoint(body),
+        ("POST", "/api/docker-remote-logs") => docker::docker_remote_logs_endpoint(body),
+        ("POST", "/api/docker-remote-acquire") => docker::docker_remote_acquire_endpoint(body),
         ("POST", "/api/open-url") => desktop::open_url_endpoint(body),
         ("POST", "/api/pick-file") => desktop::pick_path_endpoint(false),
         ("POST", "/api/pick-folder") => desktop::pick_path_endpoint(true),

@@ -540,6 +540,241 @@ impl RemoteConnection {
         }
     }
 
+    /// Uzak agent tarafındaki Docker sistem durumunu sorgular.
+    pub fn docker_status(&mut self) -> AmeleResult<crate::docker::DockerSystemStatus> {
+        self.send_json(&json!({ "komut": "docker_durum" }))?;
+        let response = self.read_json_line()?;
+        if !is_ok(&response) {
+            return Err(AmeleError::new(
+                HataKodu::Protokol,
+                message_from(&response, "Docker durumu sorgulanamadi"),
+            ));
+        }
+
+        let is_avail = response
+            .get("docker_mevcut")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let is_running = response
+            .get("docker_calisiyor")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let storage_driver = response
+            .get("depolama_surucusu")
+            .and_then(Value::as_str)
+            .unwrap_or("overlay2")
+            .to_string();
+        let root_dir = response
+            .get("kok_dizin")
+            .and_then(Value::as_str)
+            .unwrap_or("/var/lib/docker")
+            .to_string();
+        let count = response
+            .get("konteyner_sayisi")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let running = response
+            .get("calisan_sayisi")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let paused = response
+            .get("duraklatilan_sayisi")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let stopped = response
+            .get("durdurulan_sayisi")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let message = message_from(&response, "Docker durumu alindi");
+
+        Ok(crate::docker::DockerSystemStatus {
+            docker_available: is_avail,
+            docker_running: is_running,
+            storage_driver,
+            root_dir,
+            containers_count: count,
+            running_count: running,
+            paused_count: paused,
+            stopped_count: stopped,
+            is_offline: false,
+            message,
+        })
+    }
+
+    /// Uzak agent üzerindeki Docker konteynerlerini listeler ve güvenlik analizini çeker.
+    pub fn list_docker_containers(&mut self) -> AmeleResult<Vec<crate::docker::DockerContainerSummary>> {
+        self.send_json(&json!({ "komut": "docker_listele" }))?;
+        let response = self.read_json_line()?;
+        if !is_ok(&response) {
+            return Err(AmeleError::new(
+                HataKodu::Protokol,
+                message_from(&response, "Docker konteynerleri listelenemedi"),
+            ));
+        }
+
+        let containers = response
+            .get("konteynerler")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut list = Vec::new();
+        for item in containers {
+            if let Ok(summary) = serde_json::from_value::<crate::docker::DockerContainerSummary>(item) {
+                list.push(summary);
+            }
+        }
+        Ok(list)
+    }
+
+    /// Uzak agent üzerindeki belirli bir konteynerin loglarını çeker.
+    pub fn get_docker_container_logs(
+        &mut self,
+        container_id: &str,
+        tail: usize,
+    ) -> AmeleResult<Vec<Value>> {
+        self.send_json(&json!({
+            "komut": "docker_loglar",
+            "konteyner_id": container_id,
+            "tail": tail,
+        }))?;
+        let response = self.read_json_line()?;
+        if !is_ok(&response) {
+            return Err(AmeleError::new(
+                HataKodu::Protokol,
+                message_from(&response, "Docker loglari alinamadi"),
+            ));
+        }
+
+        let logs = response
+            .get("loglar")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        Ok(logs)
+    }
+
+    /// Uzak agent üzerindeki Docker delillerini (tar.gz paketi olarak) akışla yerel dosyaya indirir.
+    pub fn acquire_remote_docker<F>(
+        &mut self,
+        container_id: &str,
+        acquire_diff: bool,
+        acquire_logs: bool,
+        acquire_config: bool,
+        local_path: impl AsRef<Path>,
+        job_id: Option<&str>,
+        mut progress: F,
+    ) -> AmeleResult<RemoteTransferResult>
+    where
+        F: FnMut(u64, u64),
+    {
+        if let Some(parent) = local_path.as_ref().parent() {
+            fs::create_dir_all(parent).map_err(|err| {
+                AmeleError::io(HataKodu::DosyaYazma, "Hedef klasor olusturulamadi", err)
+            })?;
+        }
+
+        let mut request = json!({
+            "komut": "docker_edinim_baslat",
+            "konteyner_id": container_id,
+            "acquire_diff": acquire_diff,
+            "acquire_logs": acquire_logs,
+            "acquire_config": acquire_config,
+        });
+        if let Some(job_id) = job_id {
+            request["is_id"] = Value::String(job_id.to_string());
+        }
+        self.send_json(&request)?;
+
+        let start = self.read_json_line()?;
+        if !is_ok(&start) {
+            return Err(AmeleError::new(
+                HataKodu::Protokol,
+                message_from(&start, "Docker edinimi baslatilamadi"),
+            ));
+        }
+
+        let mut transfer_job_id = start
+            .get("is_id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let mut total = start
+            .get("tahmini_boyut")
+            .and_then(Value::as_u64)
+            .unwrap_or_default();
+
+        let data_start = self.read_json_line()?;
+        if data_start.get("tur").and_then(Value::as_str) != Some("veri_basliyor") {
+            return Err(AmeleError::new(
+                HataKodu::Protokol,
+                message_from(&data_start, "Veri baslangici alinamadi"),
+            ));
+        }
+        if transfer_job_id.is_empty() {
+            transfer_job_id = data_start
+                .get("is_id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+        }
+        total = data_start
+            .get("toplam")
+            .and_then(Value::as_u64)
+            .unwrap_or(total);
+
+        let mut output = File::create(local_path.as_ref())
+            .map_err(|err| AmeleError::io(HataKodu::DosyaYazma, "Yerel dosya acilamadi", err))?;
+        let mut transferred = 0_u64;
+        let mut buffer = vec![0_u8; DEFAULT_CHUNK_SIZE];
+
+        while transferred < total {
+            let to_read = (total - transferred).min(buffer.len() as u64) as usize;
+            let read = self
+                .reader
+                .read(&mut buffer[..to_read])
+                .map_err(|err| AmeleError::io(HataKodu::AgAlma, "Uzak veri okunamadi", err))?;
+            if read == 0 {
+                drop(output);
+                let _ = mark_partial(local_path.as_ref());
+                return Err(AmeleError::new(
+                    HataKodu::BaglantiKesildi,
+                    "Ajan baglantisi kesildi",
+                ));
+            }
+            output
+                .write_all(&buffer[..read])
+                .map_err(|err| AmeleError::io(HataKodu::DosyaYazma, "Uzak veri yazilamadi", err))?;
+            transferred += read as u64;
+            progress(transferred, total);
+        }
+        output.flush().map_err(|err| {
+            AmeleError::io(HataKodu::DosyaYazma, "Hedef dosya flush edilemedi", err)
+        })?;
+        drop(output);
+
+        let end = self.read_json_line()?;
+        if end.get("tur").and_then(Value::as_str) != Some("bitti") {
+            let _ = mark_partial(local_path.as_ref());
+            return Err(AmeleError::new(
+                HataKodu::Protokol,
+                message_from(&end, "Bitis mesaji alinamadi"),
+            ));
+        }
+
+        Ok(RemoteTransferResult {
+            job_id: transfer_job_id,
+            target_path: local_path.as_ref().to_path_buf(),
+            bytes_transferred: transferred,
+            sha256: end
+                .get("sha256")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            md5: end.get("md5").and_then(Value::as_str).map(str::to_string),
+            message: message_from(&end, "Docker delil paketi aktarildi"),
+        })
+    }
+
     /// Bağlantı açılışında agent kimliği, sürümü ve özelliklerini doğrular.
     fn hello(&mut self) -> AmeleResult<()> {
         let mut request = json!({
