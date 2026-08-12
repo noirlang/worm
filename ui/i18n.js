@@ -1,4 +1,5 @@
 export const translations = {
+  tr: {
     "nav.home": "Ana Sayfa",
     "nav.windows": "Windows Araçları",
     "nav.linux": "Linux Araçları",
