@@ -27,7 +27,7 @@ export const dockerState = {
   },
 };
 
-export function dockerPage({ t, icon, state, pageTitle, pickerField, field, escapeHtml, backendReady }) {
+export function dockerPage({ t, icon, state, pageTitle, pickerField, field, escapeHtml, backendReady, casePanel }) {
   const d = dockerState;
   const isRemote = d.mode === "remote";
   const status = isRemote ? d.remoteStatus : d.localStatus;
@@ -85,6 +85,9 @@ export function dockerPage({ t, icon, state, pageTitle, pickerField, field, esca
       <div class="workflow-layout">
         <!-- Sol Ana Panel -->
         <div class="workflow-panel">
+          ${casePanel ? casePanel("docker", t("docker.caseHint") || "Konteyner adli delil edinimi seçilen vakanın docker klasörüne yazılır. Vaka yoksa yeni vaka adıyla otomatik oluşturulur.") : ""}
+          <div class="section-divider"></div>
+
           ${!isRemote ? `
             <p class="section-label">${t("docker.localSettings")}</p>
             ${renderPicker(t("docker.customRoot"), "docker-custom-root", d.customRoot || "/var/lib/docker", "folder")}
@@ -396,7 +399,7 @@ function renderLogsTab(d, t, escapeHtml) {
   `;
 }
 
-export async function handleDockerAction(e, { apiRequest, setRoute, render }) {
+export async function handleDockerAction(e, { apiRequest, setRoute, render, state }) {
   const target = e.target.closest("[data-docker-action]");
   if (!target) return;
 
@@ -436,7 +439,7 @@ export async function handleDockerAction(e, { apiRequest, setRoute, render }) {
   } else if (action === "acquire") {
     const cid = target.dataset.id;
     const cname = target.dataset.name || "container";
-    await startDockerAcquisition(cid, cname, { apiRequest, setRoute, render });
+    await startDockerAcquisition(cid, cname, { apiRequest, setRoute, render, state });
   }
 }
 
@@ -561,23 +564,26 @@ async function loadContainerLogs(containerId, apiRequest, render) {
   }
 }
 
-async function startDockerAcquisition(containerId, containerName, { apiRequest, setRoute, render }) {
+async function startDockerAcquisition(containerId, containerName, { apiRequest, setRoute, render, state }) {
   dockerState.isAcquiring = true;
   dockerState.lastAction = `Edinim başlatılıyor: ${containerName}`;
   try {
     const isRemote = dockerState.mode === "remote";
     const endpoint = isRemote ? "/api/docker-remote-acquire" : "/api/docker-acquire-local";
+    const activeCaseName = state?.activeCase || null;
     const payload = isRemote ? {
       ip: dockerState.remote.ip,
       port: dockerState.remote.port,
       token: dockerState.remote.token || null,
       container_id: containerId,
       container_name: containerName,
+      case_name: activeCaseName,
       acquire_diff: true,
       acquire_logs: true,
       acquire_config: true,
     } : {
       container_id: containerId,
+      case_name: activeCaseName,
       acquire_diff: true,
       acquire_logs: true,
       acquire_config: true,

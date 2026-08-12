@@ -731,6 +731,7 @@ function render() {
       field,
       escapeHtml,
       caseSelectOptions,
+      casePanel: boundCasePanel,
       detailPanel: boundDetailPanel,
       toolHub: (platform) => toolHub(platform),
       platformLabel,
