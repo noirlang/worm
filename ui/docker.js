@@ -243,7 +243,7 @@ function renderInspectorModal(c, d, t, icon, escapeHtml) {
 
   return `
     <div class="modal-backdrop" data-docker-action="close-modal">
-      <div class="docker-modal-content" onclick="event.stopPropagation()">
+      <div class="docker-modal-content">
         <div class="modal-header">
           <div class="modal-title-group">
             <h2>${icon("docker")} ${escapeHtml(c.name || "container")} <code>(${c.short_id || (c.id ? c.id.substring(0, 12) : "-")})</code></h2>
@@ -407,6 +407,7 @@ export async function handleDockerAction(e, { apiRequest, setRoute, render, stat
 
   if (action === "set-mode") {
     dockerState.mode = target.dataset.mode || "local";
+    dockerState.selectedContainer = null;
     render();
   } else if (action === "set-filter") {
     dockerState.filter = target.dataset.filter || "all";
@@ -434,6 +435,9 @@ export async function handleDockerAction(e, { apiRequest, setRoute, render, stat
     dockerState.selectedTab = target.dataset.tab || "overview";
     render();
   } else if (action === "close-modal") {
+    if (target.classList.contains("modal-backdrop") && e.target !== target) {
+      return;
+    }
     dockerState.selectedContainer = null;
     render();
   } else if (action === "acquire") {
