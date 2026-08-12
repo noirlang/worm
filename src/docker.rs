@@ -164,36 +164,43 @@ pub fn check_docker_status(custom_root: Option<&Path>) -> DockerSystemStatus {
     let mut running_count = 0;
     let mut paused_count = 0;
     let mut stopped_count = 0;
+    let mut permission_denied = false;
 
     if containers_exist {
-        if let Ok(entries) = fs::read_dir(&containers_dir) {
-            for entry in entries.flatten() {
-                if entry.path().is_dir() {
-                    containers_count += 1;
-                    let config_file = entry.path().join("config.v2.json");
-                    if let Ok(content) = fs::read_to_string(config_file) {
-                        if let Ok(val) = serde_json::from_str::<Value>(&content) {
-                            let running = val
-                                .get("State")
-                                .and_then(|s| s.get("Running"))
-                                .and_then(|r| r.as_bool())
-                                .unwrap_or(false);
-                            let paused = val
-                                .get("State")
-                                .and_then(|s| s.get("Paused"))
-                                .and_then(|p| p.as_bool())
-                                .unwrap_or(false);
-                            if running {
-                                running_count += 1;
-                            } else if paused {
-                                paused_count += 1;
-                            } else {
-                                stopped_count += 1;
+        match fs::read_dir(&containers_dir) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    if entry.path().is_dir() {
+                        containers_count += 1;
+                        let config_file = entry.path().join("config.v2.json");
+                        if let Ok(content) = fs::read_to_string(config_file) {
+                            if let Ok(val) = serde_json::from_str::<Value>(&content) {
+                                let running = val
+                                    .get("State")
+                                    .and_then(|s| s.get("Running"))
+                                    .and_then(|r| r.as_bool())
+                                    .unwrap_or(false);
+                                let paused = val
+                                    .get("State")
+                                    .and_then(|s| s.get("Paused"))
+                                    .and_then(|p| p.as_bool())
+                                    .unwrap_or(false);
+                                if running {
+                                    running_count += 1;
+                                } else if paused {
+                                    paused_count += 1;
+                                } else {
+                                    stopped_count += 1;
+                                }
                             }
                         }
                     }
                 }
             }
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                permission_denied = true;
+            }
+            _ => {}
         }
     }
 
@@ -209,7 +216,9 @@ pub fn check_docker_status(custom_root: Option<&Path>) -> DockerSystemStatus {
         "unknown".to_string()
     };
 
-    let message = if is_custom {
+    let message = if permission_denied {
+        "Docker dizinine (/var/lib/docker) erişim izni yok. Root / sudo yetkisi gerekebilir.".to_string()
+    } else if is_custom {
         format!(
             "Bağlanmış disk imajından Docker dizini tarandı ({})",
             root_path.display()
@@ -412,14 +421,24 @@ pub fn list_containers(custom_root: Option<&Path>) -> AmeleResult<Vec<DockerCont
     let mut list = Vec::new();
 
     let entries = fs::read_dir(&containers_dir).map_err(|e| {
-        AmeleError::io(
-            HataKodu::DosyaOkuma,
-            format!(
-                "Docker konteyner dizini okunamadı: {}",
-                containers_dir.display()
-            ),
-            e,
-        )
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            AmeleError::new(
+                HataKodu::YetkisizErisim,
+                format!(
+                    "Docker dizinine ({}) erişim reddedildi. Root/sudo yetkisi gerekebilir.",
+                    containers_dir.display()
+                ),
+            )
+        } else {
+            AmeleError::io(
+                HataKodu::DosyaOkuma,
+                format!(
+                    "Docker konteyner dizini okunamadı: {}",
+                    containers_dir.display()
+                ),
+                e,
+            )
+        }
     })?;
 
     for entry in entries.flatten() {
