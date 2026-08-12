@@ -416,31 +416,48 @@ pub fn list_containers(custom_root: Option<&Path>) -> AmeleResult<Vec<DockerCont
 
     let containers_dir = root_path.join("containers");
     if !containers_dir.exists() || !containers_dir.is_dir() {
+        if custom_root.is_none() {
+            if let Ok(cli_list) = list_containers_from_cli() {
+                if !cli_list.is_empty() {
+                    return Ok(cli_list);
+                }
+            }
+        }
         return Ok(Vec::new());
     }
 
     let mut list = Vec::new();
 
-    let entries = fs::read_dir(&containers_dir).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::PermissionDenied {
-            AmeleError::new(
-                HataKodu::YetkisizErisim,
-                format!(
-                    "Docker dizinine ({}) erişim reddedildi. Root/sudo yetkisi gerekebilir.",
-                    containers_dir.display()
-                ),
-            )
-        } else {
-            AmeleError::io(
-                HataKodu::DosyaOkuma,
-                format!(
-                    "Docker konteyner dizini okunamadı: {}",
-                    containers_dir.display()
-                ),
-                e,
-            )
+    let entries = match fs::read_dir(&containers_dir) {
+        Ok(e) => e,
+        Err(e) => {
+            if custom_root.is_none() {
+                if let Ok(cli_list) = list_containers_from_cli() {
+                    if !cli_list.is_empty() {
+                        return Ok(cli_list);
+                    }
+                }
+            }
+            if e.kind() == std::io::ErrorKind::PermissionDenied {
+                return Err(AmeleError::new(
+                    HataKodu::YetkisizErisim,
+                    format!(
+                        "Docker dizinine ({}) erişim reddedildi. Root/sudo yetkisi gerekebilir.",
+                        containers_dir.display()
+                    ),
+                ));
+            } else {
+                return Err(AmeleError::io(
+                    HataKodu::DosyaOkuma,
+                    format!(
+                        "Docker konteyner dizini okunamadı: {}",
+                        containers_dir.display()
+                    ),
+                    e,
+                ));
+            }
         }
-    })?;
+    };
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -479,213 +496,325 @@ pub fn list_containers(custom_root: Option<&Path>) -> AmeleResult<Vec<DockerCont
             Value::Null
         };
 
-        let short_id = if container_id.len() >= 12 {
-            container_id[..12].to_string()
-        } else {
-            container_id.clone()
-        };
+        let summary =
+            parse_single_container(&config_v2, &host_config, &container_id, path.to_str());
+        list.push(summary);
+    }
 
-        let name = config_v2
-            .get("Name")
-            .and_then(|n| n.as_str())
-            .unwrap_or("")
-            .trim_start_matches('/')
-            .to_string();
-
-        let image = config_v2
-            .get("Config")
-            .and_then(|c| c.get("Image"))
-            .and_then(|i| i.as_str())
-            .or_else(|| config_v2.get("Image").and_then(|i| i.as_str()))
-            .unwrap_or("unknown")
-            .to_string();
-
-        let created = config_v2
-            .get("Created")
-            .and_then(|c| c.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let state_val = config_v2.get("State").cloned().unwrap_or(Value::Null);
-        let running = state_val
-            .get("Running")
-            .and_then(|r| r.as_bool())
-            .unwrap_or(false);
-        let pid = state_val.get("Pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
-        let exit_code = state_val
-            .get("ExitCode")
-            .and_then(|e| e.as_i64())
-            .unwrap_or(0) as i32;
-
-        let state_str = if running {
-            "running".to_string()
-        } else if state_val
-            .get("Paused")
-            .and_then(|p| p.as_bool())
-            .unwrap_or(false)
-        {
-            "paused".to_string()
-        } else if state_val
-            .get("Restarting")
-            .and_then(|r| r.as_bool())
-            .unwrap_or(false)
-        {
-            "restarting".to_string()
-        } else {
-            "exited".to_string()
-        };
-
-        let driver = config_v2
-            .get("Driver")
-            .and_then(|d| d.as_str())
-            .unwrap_or("overlay2")
-            .to_string();
-
-        let graph_driver = config_v2
-            .get("GraphDriver")
-            .and_then(|g| g.get("Data"))
-            .cloned()
-            .unwrap_or(Value::Null);
-
-        let upper_dir = graph_driver
-            .get("UpperDir")
-            .and_then(|u| u.as_str())
-            .map(|s| s.to_string());
-        let merged_dir = graph_driver
-            .get("MergedDir")
-            .and_then(|m| m.as_str())
-            .map(|s| s.to_string());
-        let work_dir = graph_driver
-            .get("WorkDir")
-            .and_then(|w| w.as_str())
-            .map(|s| s.to_string());
-
-        let log_file_candidate = path.join(format!("{}-json.log", container_id));
-        let log_path = if log_file_candidate.exists() {
-            Some(log_file_candidate.to_string_lossy().to_string())
-        } else {
-            None
-        };
-
-        let ip_address = config_v2
-            .get("NetworkSettings")
-            .and_then(|n| n.get("IPAddress"))
-            .and_then(|ip| ip.as_str())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
-
-        let mut ports = Vec::new();
-        if let Some(port_map) = host_config
-            .get("PortBindings")
-            .and_then(|pb| pb.as_object())
-        {
-            for (container_port, bindings) in port_map {
-                if let Some(bindings_arr) = bindings.as_array() {
-                    for b in bindings_arr {
-                        let host_port = b.get("HostPort").and_then(|p| p.as_str()).unwrap_or("");
-                        let host_ip = b.get("HostIp").and_then(|i| i.as_str()).unwrap_or("");
-                        ports.push(format!(
-                            "{}:{}/{} -> {}",
-                            if host_ip.is_empty() {
-                                "0.0.0.0"
-                            } else {
-                                host_ip
-                            },
-                            host_port,
-                            container_port,
-                            container_port
-                        ));
-                    }
-                }
+    if list.is_empty() && custom_root.is_none() {
+        if let Ok(cli_list) = list_containers_from_cli() {
+            if !cli_list.is_empty() {
+                return Ok(cli_list);
             }
         }
-
-        let mut mounts = Vec::new();
-        if let Some(mount_arr) = config_v2.get("MountPoints").and_then(|m| m.as_object()) {
-            for (_, mval) in mount_arr {
-                let source = mval
-                    .get("Source")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let destination = mval
-                    .get("Destination")
-                    .and_then(|d| d.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let mode = mval
-                    .get("Mode")
-                    .and_then(|m| m.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let rw = mval.get("RW").and_then(|r| r.as_bool()).unwrap_or(true);
-                let propagation = mval
-                    .get("Propagation")
-                    .and_then(|p| p.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                mounts.push(ContainerMount {
-                    source,
-                    destination,
-                    mode,
-                    rw,
-                    propagation,
-                });
-            }
-        }
-
-        let mut env_list = Vec::new();
-        if let Some(env_arr) = config_v2
-            .get("Config")
-            .and_then(|c| c.get("Env"))
-            .and_then(|e| e.as_array())
-        {
-            for item in env_arr {
-                if let Some(s) = item.as_str() {
-                    env_list.push(s.to_string());
-                }
-            }
-        }
-
-        let secrets_found = scan_env_for_secrets(&env_list);
-        let (risk_level, risk_reasons) = evaluate_container_risk(&config_v2, &host_config, &mounts);
-
-        let privileged = host_config
-            .get("Privileged")
-            .and_then(|p| p.as_bool())
-            .unwrap_or(false);
-
-        list.push(DockerContainerSummary {
-            id: container_id,
-            short_id,
-            name: if name.is_empty() {
-                "unnamed".to_string()
-            } else {
-                name
-            },
-            image,
-            created,
-            state: state_str,
-            running,
-            pid,
-            exit_code,
-            upper_dir,
-            merged_dir,
-            work_dir,
-            log_path,
-            ip_address,
-            ports,
-            privileged,
-            risk_level,
-            risk_reasons,
-            mounts,
-            secrets_found,
-            driver,
-        });
     }
 
     list.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(list)
+}
 
+/// Tek bir konteyner verisini (config_v2 ve host_config) adli bilişim özetine dönüştürür.
+pub fn parse_single_container(
+    config_v2: &Value,
+    host_config: &Value,
+    container_id: &str,
+    container_path: Option<&str>,
+) -> DockerContainerSummary {
+    let effective_host_config =
+        if host_config.is_object() && !host_config.as_object().unwrap().is_empty() {
+            host_config
+        } else {
+            config_v2.get("HostConfig").unwrap_or(host_config)
+        };
+
+    let short_id = if container_id.len() >= 12 {
+        container_id[..12].to_string()
+    } else {
+        container_id.to_string()
+    };
+
+    let name = config_v2
+        .get("Name")
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+        .trim_start_matches('/')
+        .to_string();
+
+    let image = config_v2
+        .get("Config")
+        .and_then(|c| c.get("Image"))
+        .and_then(|i| i.as_str())
+        .or_else(|| config_v2.get("Image").and_then(|i| i.as_str()))
+        .unwrap_or("unknown")
+        .to_string();
+
+    let created = config_v2
+        .get("Created")
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let state_val = config_v2.get("State").cloned().unwrap_or(Value::Null);
+    let running = state_val
+        .get("Running")
+        .and_then(|r| r.as_bool())
+        .unwrap_or(false);
+    let pid = state_val.get("Pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
+    let exit_code = state_val
+        .get("ExitCode")
+        .and_then(|e| e.as_i64())
+        .unwrap_or(0) as i32;
+
+    let state_str = if running {
+        "running".to_string()
+    } else if state_val
+        .get("Paused")
+        .and_then(|p| p.as_bool())
+        .unwrap_or(false)
+    {
+        "paused".to_string()
+    } else if state_val
+        .get("Restarting")
+        .and_then(|r| r.as_bool())
+        .unwrap_or(false)
+    {
+        "restarting".to_string()
+    } else {
+        "exited".to_string()
+    };
+
+    let driver = config_v2
+        .get("Driver")
+        .and_then(|d| d.as_str())
+        .unwrap_or("overlay2")
+        .to_string();
+
+    let graph_driver = config_v2
+        .get("GraphDriver")
+        .and_then(|g| g.get("Data"))
+        .cloned()
+        .unwrap_or(Value::Null);
+
+    let upper_dir = graph_driver
+        .get("UpperDir")
+        .and_then(|u| u.as_str())
+        .map(|s| s.to_string());
+    let merged_dir = graph_driver
+        .get("MergedDir")
+        .and_then(|m| m.as_str())
+        .map(|s| s.to_string());
+    let work_dir = graph_driver
+        .get("WorkDir")
+        .and_then(|w| w.as_str())
+        .map(|s| s.to_string());
+
+    let log_path = config_v2
+        .get("LogPath")
+        .and_then(|l| l.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| container_path.map(|p| format!("{}/{}-json.log", p, container_id)));
+
+    let ip_address = config_v2
+        .get("NetworkSettings")
+        .and_then(|n| n.get("IPAddress"))
+        .and_then(|ip| ip.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    let mut ports = Vec::new();
+    if let Some(port_map) = effective_host_config
+        .get("PortBindings")
+        .and_then(|pb| pb.as_object())
+    {
+        for (container_port, bindings) in port_map {
+            if let Some(bindings_arr) = bindings.as_array() {
+                for b in bindings_arr {
+                    let host_port = b.get("HostPort").and_then(|p| p.as_str()).unwrap_or("");
+                    let host_ip = b.get("HostIp").and_then(|i| i.as_str()).unwrap_or("");
+                    ports.push(format!(
+                        "{}:{}/{} -> {}",
+                        if host_ip.is_empty() {
+                            "0.0.0.0"
+                        } else {
+                            host_ip
+                        },
+                        host_port,
+                        container_port,
+                        container_port
+                    ));
+                }
+            }
+        }
+    }
+
+    let mut mounts = Vec::new();
+    if let Some(mount_arr) = config_v2.get("MountPoints").and_then(|m| m.as_object()) {
+        for (_, mval) in mount_arr {
+            let source = mval
+                .get("Source")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            let destination = mval
+                .get("Destination")
+                .and_then(|d| d.as_str())
+                .unwrap_or("")
+                .to_string();
+            let mode = mval
+                .get("Mode")
+                .and_then(|m| m.as_str())
+                .unwrap_or("")
+                .to_string();
+            let rw = mval.get("RW").and_then(|r| r.as_bool()).unwrap_or(true);
+            let propagation = mval
+                .get("Propagation")
+                .and_then(|p| p.as_str())
+                .unwrap_or("")
+                .to_string();
+            mounts.push(ContainerMount {
+                source,
+                destination,
+                mode,
+                rw,
+                propagation,
+            });
+        }
+    } else if let Some(mount_arr) = config_v2.get("Mounts").and_then(|m| m.as_array()) {
+        for mval in mount_arr {
+            let source = mval
+                .get("Source")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            let destination = mval
+                .get("Destination")
+                .and_then(|d| d.as_str())
+                .unwrap_or("")
+                .to_string();
+            let mode = mval
+                .get("Mode")
+                .and_then(|m| m.as_str())
+                .unwrap_or("")
+                .to_string();
+            let rw = mval.get("RW").and_then(|r| r.as_bool()).unwrap_or(true);
+            let propagation = mval
+                .get("Propagation")
+                .and_then(|p| p.as_str())
+                .unwrap_or("")
+                .to_string();
+            mounts.push(ContainerMount {
+                source,
+                destination,
+                mode,
+                rw,
+                propagation,
+            });
+        }
+    }
+
+    let mut env_list = Vec::new();
+    if let Some(env_arr) = config_v2
+        .get("Config")
+        .and_then(|c| c.get("Env"))
+        .and_then(|e| e.as_array())
+    {
+        for item in env_arr {
+            if let Some(s) = item.as_str() {
+                env_list.push(s.to_string());
+            }
+        }
+    }
+
+    let secrets_found = scan_env_for_secrets(&env_list);
+    let (risk_level, risk_reasons) =
+        evaluate_container_risk(config_v2, effective_host_config, &mounts);
+
+    let privileged = effective_host_config
+        .get("Privileged")
+        .and_then(|p| p.as_bool())
+        .unwrap_or(false);
+
+    DockerContainerSummary {
+        id: container_id.to_string(),
+        short_id,
+        name: if name.is_empty() {
+            "unnamed".to_string()
+        } else {
+            name
+        },
+        image,
+        created,
+        state: state_str,
+        running,
+        pid,
+        exit_code,
+        upper_dir,
+        merged_dir,
+        work_dir,
+        log_path,
+        ip_address,
+        ports,
+        privileged,
+        risk_level,
+        risk_reasons,
+        mounts,
+        secrets_found,
+        driver,
+    }
+}
+
+/// Docker komut satırı arayüzünden (CLI) canlı konteyner listesini çeker.
+pub fn list_containers_from_cli() -> AmeleResult<Vec<DockerContainerSummary>> {
+    let output = std::process::Command::new("docker")
+        .args(["ps", "-aq"])
+        .output()
+        .map_err(|e| AmeleError::io(HataKodu::DosyaOkuma, "docker ps komutu çalıştırılamadı", e))?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let ids_str = String::from_utf8_lossy(&output.stdout);
+    let ids: Vec<&str> = ids_str.split_whitespace().collect();
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let inspect_output = std::process::Command::new("docker")
+        .arg("inspect")
+        .args(&ids)
+        .output()
+        .map_err(|e| {
+            AmeleError::io(
+                HataKodu::DosyaOkuma,
+                "docker inspect komutu çalıştırılamadı",
+                e,
+            )
+        })?;
+
+    if !inspect_output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let inspect_json: Value = serde_json::from_slice(&inspect_output.stdout).map_err(|e| {
+        AmeleError::new(
+            HataKodu::IcerikGecersiz,
+            format!("docker inspect çıktısı JSON olarak ayrıştırılamadı: {e}"),
+        )
+    })?;
+
+    let mut list = Vec::new();
+    if let Some(arr) = inspect_json.as_array() {
+        for val in arr {
+            let cid = val.get("Id").and_then(|i| i.as_str()).unwrap_or("");
+            if !cid.is_empty() {
+                let summary = parse_single_container(val, &Value::Null, cid, None);
+                list.push(summary);
+            }
+        }
+    }
+
+    list.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(list)
 }
 
@@ -704,24 +833,43 @@ pub fn get_container_logs(
         .join(container_id)
         .join(format!("{}-json.log", container_id));
 
-    if !log_file.exists() {
-        return Ok(Vec::new());
-    }
-
-    let file = File::open(&log_file).map_err(|e| {
-        AmeleError::io(
-            HataKodu::DosyaOkuma,
-            format!("Log dosyası açılamadı: {}", log_file.display()),
-            e,
-        )
-    })?;
-
-    let reader = BufReader::new(file);
     let mut logs = Vec::new();
 
-    for line in reader.lines().flatten() {
-        if let Ok(val) = serde_json::from_str::<Value>(&line) {
-            logs.push(val);
+    if log_file.exists() {
+        if let Ok(file) = File::open(&log_file) {
+            let reader = BufReader::new(file);
+            for line in reader.lines().flatten() {
+                if let Ok(val) = serde_json::from_str::<Value>(&line) {
+                    logs.push(val);
+                }
+            }
+        }
+    }
+
+    if logs.is_empty() && custom_root.is_none() {
+        let tail_arg = if tail > 0 {
+            tail.to_string()
+        } else {
+            "200".to_string()
+        };
+        if let Ok(output) = std::process::Command::new("docker")
+            .args(["logs", "--tail", &tail_arg, container_id])
+            .output()
+        {
+            if output.status.success() {
+                let stdout_str = String::from_utf8_lossy(&output.stdout);
+                let stderr_str = String::from_utf8_lossy(&output.stderr);
+                let combined = format!("{}{}", stdout_str, stderr_str);
+                for line in combined.lines() {
+                    if !line.is_empty() {
+                        logs.push(json!({
+                            "log": format!("{}\n", line),
+                            "stream": "cli",
+                            "time": Local::now().to_rfc3339()
+                        }));
+                    }
+                }
+            }
         }
     }
 
@@ -748,32 +896,62 @@ where
         .unwrap_or_else(|| PathBuf::from(DEFAULT_DOCKER_ROOT));
 
     let container_dir = root_path.join("containers").join(&req.container_id);
-    if !container_dir.exists() {
+    let config_path = container_dir.join("config.v2.json");
+    let hostconfig_path = container_dir.join("hostconfig.json");
+
+    let (config_v2, host_config) = if config_path.exists() {
+        let cv2 = fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|c| serde_json::from_str(&c).ok())
+            .unwrap_or(Value::Null);
+        let hc = if hostconfig_path.exists() {
+            fs::read_to_string(&hostconfig_path)
+                .ok()
+                .and_then(|c| serde_json::from_str(&c).ok())
+                .unwrap_or(Value::Null)
+        } else {
+            Value::Null
+        };
+        (cv2, hc)
+    } else if req.custom_docker_root.is_none() {
+        if let Ok(output) = std::process::Command::new("docker")
+            .args(["inspect", &req.container_id])
+            .output()
+        {
+            if output.status.success() {
+                if let Ok(Value::Array(arr)) = serde_json::from_slice::<Value>(&output.stdout) {
+                    if let Some(first) = arr.into_iter().next() {
+                        let hc = first.get("HostConfig").cloned().unwrap_or(Value::Null);
+                        (first, hc)
+                    } else {
+                        return Err(AmeleError::new(
+                            HataKodu::DosyaAcilamadi,
+                            format!("Konteyner bulunamadı: {}", req.container_id),
+                        ));
+                    }
+                } else {
+                    return Err(AmeleError::new(
+                        HataKodu::DosyaAcilamadi,
+                        format!("Konteyner bulunamadı: {}", req.container_id),
+                    ));
+                }
+            } else {
+                return Err(AmeleError::new(
+                    HataKodu::DosyaAcilamadi,
+                    format!("Konteyner bulunamadı: {}", req.container_id),
+                ));
+            }
+        } else {
+            return Err(AmeleError::new(
+                HataKodu::DosyaAcilamadi,
+                format!("Konteyner dizini bulunamadı: {}", container_dir.display()),
+            ));
+        }
+    } else {
         return Err(AmeleError::new(
             HataKodu::DosyaAcilamadi,
             format!("Konteyner dizini bulunamadı: {}", container_dir.display()),
         ));
-    }
-
-    let config_path = container_dir.join("config.v2.json");
-    let hostconfig_path = container_dir.join("hostconfig.json");
-
-    let config_v2: Value = if config_path.exists() {
-        fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|c| serde_json::from_str(&c).ok())
-            .unwrap_or(Value::Null)
-    } else {
-        Value::Null
-    };
-
-    let host_config: Value = if hostconfig_path.exists() {
-        fs::read_to_string(&hostconfig_path)
-            .ok()
-            .and_then(|c| serde_json::from_str(&c).ok())
-            .unwrap_or(Value::Null)
-    } else {
-        Value::Null
     };
 
     let container_name = config_v2
@@ -862,6 +1040,22 @@ where
             if fs::copy(&log_file, &dest).is_ok() {
                 files_acquired.push("container.log".to_string());
                 logs_saved = true;
+            }
+        }
+        if !logs_saved && req.custom_docker_root.is_none() {
+            if let Ok(output) = std::process::Command::new("docker")
+                .args(["logs", &req.container_id])
+                .output()
+            {
+                if output.status.success() {
+                    let dest = target_case_dir.join("container.log");
+                    let mut log_bytes = output.stdout;
+                    log_bytes.extend_from_slice(&output.stderr);
+                    if fs::write(&dest, log_bytes).is_ok() {
+                        files_acquired.push("container.log".to_string());
+                        logs_saved = true;
+                    }
+                }
             }
         }
     }

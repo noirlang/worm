@@ -89,17 +89,19 @@ export function dockerPage({ t, icon, state, pageTitle, pickerField, field, esca
             <p class="section-label">${t("docker.localSettings")}</p>
             ${renderPicker(t("docker.customRoot"), "docker-custom-root", d.customRoot || "/var/lib/docker", "folder")}
             <small class="field-hint" style="margin-top:-6px;margin-bottom:12px;display:block;">${t("docker.customRootHint")}</small>
-            <div class="button-row">
+            <div class="button-row" style="margin-top:14px;">
               <button class="primary-button" data-docker-action="scan-local" ${d.isScanning ? "disabled" : ""}>
                 ${icon("refresh")} ${d.isScanning ? t("docker.scanning") : t("docker.scan")}
               </button>
             </div>
           ` : `
             <p class="section-label">${t("workflow.connectionOps")}</p>
-            ${renderField(t("workflow.ip"), `<input class="input" id="docker-remote-ip" placeholder="${t("workflow.ipPlaceholder")}" value="${escapeHtml(d.remote.ip)}" />`)}
-            ${renderField(t("workflow.port"), `<input class="input" id="docker-remote-port" type="number" value="${escapeHtml(String(d.remote.port || 4444))}" />`)}
+            <div class="form-grid">
+              ${renderField(t("workflow.ip"), `<input class="input" id="docker-remote-ip" placeholder="${t("workflow.ipPlaceholder")}" value="${escapeHtml(d.remote.ip)}" />`)}
+              ${renderField(t("workflow.port"), `<input class="input" id="docker-remote-port" type="number" value="${escapeHtml(String(d.remote.port || 4444))}" />`)}
+            </div>
             ${renderField(t("workflow.token"), `<input class="input" id="docker-remote-token" type="password" placeholder="${t("workflow.tokenPlaceholder")}" value="${escapeHtml(d.remote.token)}" />`)}
-            <div class="button-row">
+            <div class="button-row" style="margin-top:14px;">
               <button class="primary-button" data-docker-action="scan-remote" ${d.isScanning ? "disabled" : ""}>
                 ${icon("network")} ${d.isScanning ? t("docker.scanning") : t("docker.connectAndScan")}
               </button>
