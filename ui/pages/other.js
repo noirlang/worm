@@ -251,7 +251,7 @@ export function aboutPage({ t, icon, APP_VERSION, assetPath, theme }) {
       <h2 class="section-heading">${t("about.maintainers")}</h2>
       <div class="contributor-grid">
         ${contributorCard("ME", "Melih Emik", t("about.role.lead"), "melih-emik.jpg", [
-          ["GitHub", "https://github.com/favilances"],
+          ["GitHub", "https://github.com/melihemik"],
           ["LinkedIn", "https://www.linkedin.com/in/melihemik/"],
           ["Website", "https://melihemik.com.tr"]
         ], assetPath, icon)}
