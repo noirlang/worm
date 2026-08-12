@@ -2206,10 +2206,25 @@ svg.svg-fill path {
   margin: 0;
 }
 
-/* Smooth Scroll & Animation System for Amele Next UI */
-html, body, .view, .workflow-panel, .modal-body-scroll, .inspector-section, .log-viewer-box, .docker-container-table-wrapper {
-  scroll-behavior: smooth !important;
-  overscroll-behavior: contain;
+/* Fast Native Scrolling & Animate.css Inspired Animation System */
+html, body {
+  overflow-x: hidden;
+  height: 100%;
+}
+
+.view {
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-body-scroll,
+.workflow-panel,
+.inspector-section,
+.log-viewer-box,
+.docker-container-table-wrapper {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Custom Smooth Scrollbar */
@@ -2224,111 +2239,82 @@ html, body, .view, .workflow-panel, .modal-body-scroll, .inspector-section, .log
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(245, 245, 245, 0.16);
+  background: rgba(245, 245, 245, 0.22);
   border-radius: 4px;
   border: 2px solid transparent;
   background-clip: padding-box;
-  transition: background 250ms ease;
+  transition: background 200ms ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(245, 245, 245, 0.38);
+  background: rgba(245, 245, 245, 0.45);
 }
 
-/* Page Entry Fade & Slide Animation */
+/* Animate.css Inspired Hardware-Accelerated Animations */
+.animate__animated {
+  animation-duration: 350ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .page {
-  animation: pagePopIn 380ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: opacity, transform;
+  animation: animate__fadeInUp 350ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes pagePopIn {
+@keyframes animate__fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(18px) scale(0.995);
+    transform: translate3d(0, 14px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(0, 0, 0);
   }
 }
 
-/* Modal Smooth Scale-Up Animation */
-.docker-modal-content {
-  animation: modalScaleUp 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: opacity, transform;
-}
-
-@keyframes modalScaleUp {
-  from {
-    opacity: 0;
-    transform: scale(0.94) translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-.modal-backdrop {
-  animation: backdropFadeIn 250ms ease forwards;
-}
-
-@keyframes backdropFadeIn {
+@keyframes animate__fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-/* Smooth Card Hover & Micro-Animations */
+@keyframes animate__zoomIn {
+  from {
+    opacity: 0;
+    transform: scale3d(0.95, 0.95, 0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale3d(1, 1, 1);
+  }
+}
+
+/* Modal Entry Animation */
+.docker-modal-content {
+  animation: animate__zoomIn 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modal-backdrop {
+  animation: animate__fadeIn 200ms ease forwards;
+}
+
+/* Ultra-Fast Responsive Hover Effects */
 .action-tile,
 .forensic-card,
 .doc-card,
 .contributor-card,
 .workflow-panel,
 .settings-card {
-  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 300ms ease, border-color 300ms ease, background 300ms ease !important;
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease !important;
 }
 
 .action-tile:hover,
 .forensic-card:hover {
-  transform: translateY(-4px) scale(1.012);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 20px rgba(245, 245, 245, 0.08) !important;
-  border-color: rgba(245, 245, 245, 0.28) !important;
+  transform: translate3d(0, -3px, 0) !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4), 0 0 16px rgba(245, 245, 245, 0.06) !important;
+  border-color: rgba(245, 245, 245, 0.25) !important;
 }
 
 .action-tile:active,
 .forensic-card:active {
-  transform: translateY(-1px) scale(0.995);
-}
-
-/* Tab button transition */
-.analysis-tab-btn,
-.modal-tab-btn {
-  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-/* Staggered Child Reveal Effect */
-.home-grid > *,
-.tool-grid > *,
-.workflow-layout > * {
-  animation: childFadeIn 450ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
-}
-
-.home-grid > *:nth-child(1) { animation-delay: 40ms; }
-.home-grid > *:nth-child(2) { animation-delay: 80ms; }
-.home-grid > *:nth-child(3) { animation-delay: 120ms; }
-.home-grid > *:nth-child(4) { animation-delay: 160ms; }
-.home-grid > *:nth-child(5) { animation-delay: 200ms; }
-.home-grid > *:nth-child(6) { animation-delay: 240ms; }
-.home-grid > *:nth-child(7) { animation-delay: 280ms; }
-.home-grid > *:nth-child(8) { animation-delay: 320ms; }
-
-@keyframes childFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  transform: translate3d(0, 0, 0) !important;
 }
