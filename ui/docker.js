@@ -18,6 +18,7 @@ export const dockerState = {
   loadingLogs: false,
   isScanning: false,
   isAcquiring: false,
+  lastAction: "",
   remote: {
     ip: "127.0.0.1",
     port: 4444,
@@ -26,12 +27,31 @@ export const dockerState = {
   },
 };
 
-export function dockerPage({ t, icon, state, pageTitle, escapeHtml, backendReady }) {
+export function dockerPage({ t, icon, state, pageTitle, pickerField, field, escapeHtml, backendReady }) {
   const d = dockerState;
   const isRemote = d.mode === "remote";
   const status = isRemote ? d.remoteStatus : d.localStatus;
   const rawContainers = isRemote ? d.remoteContainers : d.localContainers;
   const isScanned = isRemote ? d.remoteScanned : d.localScanned;
+
+  const renderField = field || ((label, control) => `
+    <div class="field">
+      <label>${label}</label>
+      ${control}
+    </div>
+  `);
+
+  const renderPicker = pickerField || ((label, id, value, type) => `
+    <div class="field">
+      <label>${label}</label>
+      <div class="input-action">
+        <input id="${id}" class="input" value="${escapeHtml(value)}" data-picker-target />
+        <button class="secondary-button" data-action="${type === "folder" ? "pick-folder" : "pick-file"}" data-target="#${id}">
+          ${icon(type === "folder" ? "folder" : "search")} ${t("select")}
+        </button>
+      </div>
+    </div>
+  `);
 
   // Konteyner filtreleme
   let filtered = (rawContainers || []).filter((c) => {
@@ -49,7 +69,7 @@ export function dockerPage({ t, icon, state, pageTitle, escapeHtml, backendReady
   });
 
   return `
-    <section class="page docker-page">
+    <section class="page">
       ${pageTitle(t("docker.title"), t("docker.desc"), "docker", icon)}
 
       <!-- Mod Değiştirici: Yerel vs Uzak Agent -->
@@ -62,128 +82,98 @@ export function dockerPage({ t, icon, state, pageTitle, escapeHtml, backendReady
         </button>
       </div>
 
-      <!-- Bağlantı / Kontrol Paneli -->
-      <div class="workflow-panel">
-        ${!isRemote ? `
-          <p class="section-label">${t("docker.localSettings")}</p>
-          <div class="field">
-            <label for="docker-custom-root">${t("docker.customRoot")}</label>
-            <div class="input-action">
-              <input class="input" id="docker-custom-root" placeholder="/var/lib/docker" value="${escapeHtml(d.customRoot)}" />
-              <button type="button" class="secondary-button" data-docker-action="pick-custom-root">
-                ${icon("folder")} ${t("select")}
+      <div class="workflow-layout">
+        <!-- Sol Ana Panel -->
+        <div class="workflow-panel">
+          ${!isRemote ? `
+            <p class="section-label">${t("docker.localSettings")}</p>
+            ${renderPicker(t("docker.customRoot"), "docker-custom-root", d.customRoot || "/var/lib/docker", "folder")}
+            <small class="field-hint" style="margin-top:-6px;margin-bottom:12px;display:block;">${t("docker.customRootHint")}</small>
+            <div class="button-row">
+              <button class="primary-button" data-docker-action="scan-local" ${d.isScanning ? "disabled" : ""}>
+                ${icon("refresh")} ${d.isScanning ? t("docker.scanning") : t("docker.scan")}
               </button>
             </div>
-            <small class="field-hint">${t("docker.customRootHint")}</small>
-          </div>
-          <div class="button-row">
-            <button class="primary-button" data-docker-action="scan-local" ${d.isScanning ? "disabled" : ""}>
-              ${icon("refresh")} ${d.isScanning ? t("docker.scanning") : t("docker.scan")}
-            </button>
-          </div>
-        ` : `
-          <p class="section-label">${t("workflow.connectionOps")}</p>
-          <div class="field">
-            <label for="docker-remote-ip">${t("docker.remoteHost")}</label>
-            <input class="input" type="text" id="docker-remote-ip" placeholder="192.168.1.50" value="${escapeHtml(d.remote.ip)}" />
-          </div>
-          <div class="field">
-            <label for="docker-remote-port">${t("docker.remotePort")}</label>
-            <input class="input" type="number" id="docker-remote-port" placeholder="4444" value="${escapeHtml(String(d.remote.port || 4444))}" />
-          </div>
-          <div class="field">
-            <label for="docker-remote-token">${t("docker.remoteToken")}</label>
-            <input class="input" type="password" id="docker-remote-token" placeholder="••••••••" value="${escapeHtml(d.remote.token)}" />
-          </div>
-          <div class="button-row">
-            <button class="primary-button" data-docker-action="scan-remote" ${d.isScanning ? "disabled" : ""}>
-              ${icon("network")} ${d.isScanning ? t("docker.scanning") : t("docker.connectAndScan")}
-            </button>
-          </div>
-        `}
-
-        <!-- Sistem Durum Özeti -->
-        <div class="docker-status-cards">
-          <div class="status-card">
-            <span class="status-card-label">${t("docker.statusDaemon")}</span>
-            <span class="status-card-value ${status ? (status.docker_running ? "status-online" : "status-offline") : "status-muted"}">
-              ${status ? (status.docker_running ? t("docker.daemonRunning") : t("docker.daemonOffline")) : t("docker.daemonIdle")}
-            </span>
-          </div>
-          <div class="status-card">
-            <span class="status-card-label">${t("docker.total")}</span>
-            <span class="status-card-value">${status ? (status.containers_count ?? (rawContainers?.length || 0)) : "-"}</span>
-          </div>
-          <div class="status-card">
-            <span class="status-card-label">${t("docker.running")}</span>
-            <span class="status-card-value ${status && status.running_count > 0 ? "status-online" : ""}">${status ? status.running_count : "-"}</span>
-          </div>
-          <div class="status-card">
-            <span class="status-card-label">${t("docker.stopped")}</span>
-            <span class="status-card-value status-muted">${status ? status.stopped_count : "-"}</span>
-          </div>
-          <div class="status-card">
-            <span class="status-card-label">${t("docker.storageDriver")}</span>
-            <span class="status-card-value">${status && status.storage_driver ? escapeHtml(status.storage_driver) : "-"}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Konteyner Listesi ve Filtreler -->
-      <div class="workflow-panel">
-        <div class="panel-header-row">
-          <p class="section-label" style="margin:0">${t("docker.containersTitle")} (${filtered.length})</p>
-          <div class="docker-filter-group">
-            <input type="text" class="input docker-search-input" placeholder="${t("docker.searchPlaceholder")}" value="${escapeHtml(d.search)}" data-docker-action="search" />
-            <div class="filter-pill-buttons">
-              <button class="filter-pill ${d.filter === "all" ? "active" : ""}" data-docker-action="set-filter" data-filter="all">${t("docker.filterAll")}</button>
-              <button class="filter-pill ${d.filter === "running" ? "active" : ""}" data-docker-action="set-filter" data-filter="running">${t("docker.filterRunning")}</button>
-              <button class="filter-pill ${d.filter === "stopped" ? "active" : ""}" data-docker-action="set-filter" data-filter="stopped">${t("docker.filterStopped")}</button>
-              <button class="filter-pill filter-pill-danger ${d.filter === "high_risk" ? "active" : ""}" data-docker-action="set-filter" data-filter="high_risk">${t("docker.filterHighRisk")}</button>
-            </div>
-          </div>
-        </div>
-
-        ${!isScanned ? `
-          <div class="empty-state-box">
-            <span class="empty-icon">${icon("docker")}</span>
-            <p>${t("docker.notScannedPrompt")}</p>
-            <div class="button-row" style="justify-content:center;margin-top:12px">
-              <button class="secondary-button" data-docker-action="${isRemote ? "scan-remote" : "scan-local"}">
-                ${icon(isRemote ? "network" : "refresh")} ${t(isRemote ? "docker.connectAndScan" : "docker.scan")}
+          ` : `
+            <p class="section-label">${t("workflow.connectionOps")}</p>
+            ${renderField(t("workflow.ip"), `<input class="input" id="docker-remote-ip" placeholder="${t("workflow.ipPlaceholder")}" value="${escapeHtml(d.remote.ip)}" />`)}
+            ${renderField(t("workflow.port"), `<input class="input" id="docker-remote-port" type="number" value="${escapeHtml(String(d.remote.port || 4444))}" />`)}
+            ${renderField(t("workflow.token"), `<input class="input" id="docker-remote-token" type="password" placeholder="${t("workflow.tokenPlaceholder")}" value="${escapeHtml(d.remote.token)}" />`)}
+            <div class="button-row">
+              <button class="primary-button" data-docker-action="scan-remote" ${d.isScanning ? "disabled" : ""}>
+                ${icon("network")} ${d.isScanning ? t("docker.scanning") : t("docker.connectAndScan")}
               </button>
             </div>
+          `}
+
+          <div class="section-divider"></div>
+          
+          <!-- Konteyner Listesi Başlığı ve Filtreler -->
+          <p class="section-label">${t("docker.containersTitle")} (${filtered.length})</p>
+          
+          <div class="field">
+            <input type="text" class="input" placeholder="${t("docker.searchPlaceholder")}" value="${escapeHtml(d.search)}" data-docker-action="search" />
           </div>
-        ` : (filtered.length === 0 ? `
-          <div class="empty-state-box">
-            <span class="empty-icon">${icon("docker")}</span>
-            <p>${t("docker.noContainers")}</p>
+
+          <div class="button-row" style="margin-top:8px;margin-bottom:12px;">
+            <button class="secondary-button ${d.filter === "all" ? "active" : ""}" data-docker-action="set-filter" data-filter="all">${t("docker.filterAll")}</button>
+            <button class="secondary-button ${d.filter === "running" ? "active" : ""}" data-docker-action="set-filter" data-filter="running">${t("docker.filterRunning")}</button>
+            <button class="secondary-button ${d.filter === "stopped" ? "active" : ""}" data-docker-action="set-filter" data-filter="stopped">${t("docker.filterStopped")}</button>
+            <button class="secondary-button ${d.filter === "high_risk" ? "active" : ""}" data-docker-action="set-filter" data-filter="high_risk">${t("docker.filterHighRisk")}</button>
           </div>
-        ` : `
-          <div class="docker-container-table-wrapper">
-            <table class="docker-table">
-              <thead>
-                <tr>
-                  <th>${t("docker.risk")}</th>
-                  <th>Konteyner Adı / ID</th>
-                  <th>İmaj</th>
-                  <th>Durum</th>
-                  <th>IP / Portlar</th>
-                  <th>Overlay2 UpperDir</th>
-                  <th>İşlemler</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${filtered.map((c) => renderContainerRow(c, t, icon, escapeHtml)).join("")}
-              </tbody>
-            </table>
-          </div>
-        `)}
+
+          ${!isScanned ? `
+            <div class="log-box" style="margin-top:12px;text-align:center;padding:24px 16px;">
+              • ${t("docker.notScannedPrompt")}
+            </div>
+          ` : (filtered.length === 0 ? `
+            <div class="log-box" style="margin-top:12px;text-align:center;padding:24px 16px;">
+              • ${t("docker.noContainers")}
+            </div>
+          ` : `
+            <div class="docker-container-table-wrapper" style="margin-top:12px;">
+              <table class="docker-table">
+                <thead>
+                  <tr>
+                    <th>${t("docker.risk")}</th>
+                    <th>Konteyner Adı / ID</th>
+                    <th>İmaj</th>
+                    <th>Durum</th>
+                    <th>IP / Portlar</th>
+                    <th>İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${filtered.map((c) => renderContainerRow(c, t, icon, escapeHtml)).join("")}
+                </tbody>
+              </table>
+            </div>
+          `)}
+        </div>
+
+        <!-- Sağ Bilgi Paneli -->
+        <aside class="side-panel">
+          <h3>${t("workflow.status")}</h3>
+          ${sideInfo(t("docker.side.mode"), isRemote ? t("remoteAgent") : t("localOperation"), isRemote ? "network" : "monitor", "", icon)}
+          ${sideInfo(t("docker.side.daemon"), status ? (status.docker_running ? t("docker.daemonRunning") : t("docker.daemonOffline")) : t("docker.daemonIdle"), "chip", "", icon)}
+          ${sideInfo(t("docker.side.containers"), status ? `${status.running_count || 0} ${t("docker.running")} / ${status.containers_count || 0} ${t("docker.total")}` : "-", "docker", "", icon)}
+          ${sideInfo(t("docker.side.driver"), status?.storage_driver || "-", "disk", "", icon)}
+          ${sideInfo(t("workflow.lastAction"), d.lastAction || t("lastActionReady"), "clock", "", icon)}
+        </aside>
       </div>
 
       <!-- Konteyner Detay Modal / İnceleme Paneli -->
       ${d.selectedContainer ? renderInspectorModal(d.selectedContainer, d, t, icon, escapeHtml) : ""}
     </section>
+  `;
+}
+
+function sideInfo(title, body, iconName, key = "", icon) {
+  return `
+    <div class="side-info" ${key ? `data-side="${key}"` : ""}>
+      <span class="metric-icon">${icon(iconName)}</span>
+      <span><strong>${title}</strong><small>${body}</small></span>
+    </div>
   `;
 }
 
@@ -230,16 +220,11 @@ function renderContainerRow(c, t, icon, escapeHtml) {
         </small>
       </td>
       <td>
-        <small class="path-truncate" title="${escapeHtml(c.upper_dir || "-")}">
-          ${c.upper_dir ? escapeHtml(c.upper_dir) : "<span class='text-muted'>-</span>"}
-        </small>
-      </td>
-      <td>
         <div class="row-action-buttons">
-          <button class="small-button secondary-button" data-docker-action="inspect" data-id="${c.id}">
+          <button class="secondary-button small-button" data-docker-action="inspect" data-id="${c.id}">
             ${icon("search")} ${t("docker.inspect")}
           </button>
-          <button class="small-button primary-button" data-docker-action="acquire" data-id="${c.id}" data-name="${escapeHtml(c.name || "container")}">
+          <button class="primary-button small-button" data-docker-action="acquire" data-id="${c.id}" data-name="${escapeHtml(c.name || "container")}">
             ${icon("download")} ${t("docker.acquire")}
           </button>
         </div>
@@ -424,12 +409,6 @@ export async function handleDockerAction(e, { apiRequest, setRoute, render }) {
   } else if (action === "search") {
     dockerState.search = target.value || "";
     render();
-  } else if (action === "pick-custom-root") {
-    const res = await apiRequest("/api/pick-folder", "POST", {});
-    if (res?.path) {
-      dockerState.customRoot = res.path;
-      render();
-    }
   } else if (action === "scan-local") {
     await scanLocalDocker({ apiRequest, render });
   } else if (action === "scan-remote") {
@@ -464,6 +443,7 @@ async function scanLocalDocker({ apiRequest, render }) {
   if (rootInput) dockerState.customRoot = rootInput.value.trim();
 
   dockerState.isScanning = true;
+  dockerState.lastAction = "Yerel tarama başlatıldı...";
   render();
 
   try {
@@ -481,12 +461,15 @@ async function scanLocalDocker({ apiRequest, render }) {
     dockerState.localScanned = true;
     if (containersRes?.containers) {
       dockerState.localContainers = containersRes.containers;
+      dockerState.lastAction = `Tarandı: ${containersRes.containers.length} konteyner bulundu`;
       showToast(`Docker taraması tamamlandı: ${containersRes.containers.length} konteyner bulundu.`, "success");
     } else {
       dockerState.localContainers = [];
+      dockerState.lastAction = "Konteyner bulunamadı";
       showToast(containersRes?.error || "Docker konteynerleri okunamadı.", "warning");
     }
   } catch (err) {
+    dockerState.lastAction = "Tarama hatası";
     showToast(`Docker tarama hatası: ${err.message || err}`, "error");
   } finally {
     dockerState.isScanning = false;
@@ -509,6 +492,7 @@ async function scanRemoteDocker({ apiRequest, render }) {
   }
 
   dockerState.isScanning = true;
+  dockerState.lastAction = `Uzak Agent (${dockerState.remote.ip}) bağlanılıyor...`;
   render();
 
   try {
@@ -529,13 +513,16 @@ async function scanRemoteDocker({ apiRequest, render }) {
 
     if (containersRes?.containers) {
       dockerState.remoteContainers = containersRes.containers;
+      dockerState.lastAction = `Uzak tarama başarılı: ${containersRes.containers.length} konteyner`;
       showToast(`Uzak Docker taraması başarılı: ${containersRes.containers.length} konteyner bulundu.`, "success");
     } else {
       dockerState.remoteContainers = [];
+      dockerState.lastAction = "Uzak konteyner bulunamadı";
       showToast(containersRes?.error || "Uzak Docker konteynerleri okunamadı.", "warning");
     }
   } catch (err) {
     dockerState.remote.connected = false;
+    dockerState.lastAction = "Uzak bağlantı hatası";
     showToast(`Uzak Docker bağlantı hatası: ${err.message || err}`, "error");
   } finally {
     dockerState.isScanning = false;
@@ -574,6 +561,7 @@ async function loadContainerLogs(containerId, apiRequest, render) {
 
 async function startDockerAcquisition(containerId, containerName, { apiRequest, setRoute, render }) {
   dockerState.isAcquiring = true;
+  dockerState.lastAction = `Edinim başlatılıyor: ${containerName}`;
   try {
     const isRemote = dockerState.mode === "remote";
     const endpoint = isRemote ? "/api/docker-remote-acquire" : "/api/docker-acquire-local";
@@ -596,13 +584,16 @@ async function startDockerAcquisition(containerId, containerName, { apiRequest, 
 
     const res = await apiRequest(endpoint, "POST", payload);
     if (res?.durum === "ok" || res?.is_id) {
-      showToast(`Docker delil edinimi başlatıldı (İş ID: ${res.is_id})`, "success");
+      dockerState.lastAction = `Delil edinildi: ${containerName}`;
+      showToast(`Docker delil edinimi tamamlandı/başlatıldı (İş ID: ${res.is_id})`, "success");
       dockerState.selectedContainer = null;
       render();
     } else {
+      dockerState.lastAction = "Edinim başarısız";
       showToast(res?.error || "Docker edinimi başlatılamadı.", "error");
     }
   } catch (err) {
+    dockerState.lastAction = "Edinim hatası";
     showToast(`Edinim hatası: ${err.message || err}`, "error");
   } finally {
     dockerState.isAcquiring = false;

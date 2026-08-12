@@ -845,7 +845,7 @@ const routes = {
   linux: () => toolHub("linux"),
   android: () => androidPage({ t, icon, pageTitle, state, escapeHtml, backendReady }),
   ios: () => "",
-  docker: () => dockerPage({ t, icon, state, pageTitle, escapeHtml, backendReady }),
+  docker: dockerPage,
   agent: agentPage,
   analysis: analysisPage,
   profile: profilePage,
