@@ -243,9 +243,14 @@ export function aboutPage({ t, icon, APP_VERSION, assetPath, theme }) {
 
       <h2 class="section-heading">${t("about.capabilities")}</h2>
       <div class="capability-grid">
-        ${capabilityCard(t("about.collect.title"), t("about.collect.desc"), "disk", "var(--text)", icon)}
-        ${capabilityCard(t("about.prove.title"), t("about.prove.desc"), "shield", "var(--text)", icon)}
-        ${capabilityCard(t("about.package.title"), t("about.package.desc"), "report", "var(--text)", icon)}
+        ${capabilityCard(t("home.windows.title"), t("home.windows.desc"), "windows", "var(--text)", icon)}
+        ${capabilityCard(t("home.linux.title"), t("home.linux.desc"), "linux", "var(--text)", icon)}
+        ${capabilityCard(t("home.docker.title"), t("home.docker.desc"), "docker", "var(--text)", icon)}
+        ${capabilityCard(t("home.android.title"), t("home.android.desc"), "android", "var(--text)", icon)}
+        ${capabilityCard(t("home.ios.title"), t("home.ios.desc"), "ios", "var(--text)", icon)}
+        ${capabilityCard(t("home.agent.title"), t("home.agent.desc"), "network", "var(--text)", icon)}
+        ${capabilityCard(t("home.analysis.title"), t("home.analysis.desc"), "search", "var(--text)", icon)}
+        ${capabilityCard(t("home.other.title"), t("home.other.desc"), "tiles", "var(--text)", icon)}
       </div>
 
       <h2 class="section-heading">${t("about.maintainers")}</h2>

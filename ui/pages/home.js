@@ -9,10 +9,14 @@ export function homePage({ t, icon, assetPath, theme }) {
       </div>
 
       <div class="home-grid">
-        ${homeTile(t("home.acquire.title"), t("home.acquire.desc"), "disk", "windows", "var(--text)", icon)}
-        ${homeTile(t("home.integrity.title"), t("home.integrity.desc"), "shield", "other", "var(--text)", icon)}
-        ${homeTile(t("home.evidence.title"), t("home.evidence.desc"), "scale", "other", "var(--text)", icon)}
-        ${homeTile(t("home.output.title"), t("home.output.desc"), "report", "other", "var(--text)", icon)}
+        ${homeTile(t("home.windows.title"), t("home.windows.desc"), "windows", "windows", "var(--text)", icon)}
+        ${homeTile(t("home.linux.title"), t("home.linux.desc"), "linux", "linux", "var(--text)", icon)}
+        ${homeTile(t("home.docker.title"), t("home.docker.desc"), "docker", "docker", "var(--text)", icon)}
+        ${homeTile(t("home.android.title"), t("home.android.desc"), "android", "android", "var(--text)", icon)}
+        ${homeTile(t("home.ios.title"), t("home.ios.desc"), "ios", "ios", "var(--text)", icon)}
+        ${homeTile(t("home.agent.title"), t("home.agent.desc"), "network", "agent", "var(--text)", icon)}
+        ${homeTile(t("home.analysis.title"), t("home.analysis.desc"), "search", "analysis", "var(--text)", icon)}
+        ${homeTile(t("home.other.title"), t("home.other.desc"), "tiles", "other", "var(--text)", icon)}
       </div>
     </section>
   `;
