@@ -4,7 +4,7 @@
 
 # Amele Forensic Tool
 
-*Collect digital evidence in one place. Disk, RAM, Android, and iOS backup acquisition.*
+*Windows, Linux, Android, and iOS unified digital forensics platform. Disk, RAM, logical acquisition, and backup analysis.*
 
 [Website](https://amele.noirlang.tr) | [Releases](https://github.com/noirlang/amele/releases) | [Contributing](CONTRIBUTING.md) | [Security](SECURITY.md) | [Linux Agent](https://github.com/noirlang/amele-linux) | [Windows Agent](https://github.com/noirlang/amele-win)
 
@@ -175,7 +175,7 @@ Commits without the `[build]` tag will be pushed to the `dev` branch but will no
 
 # Amele Adli Bilişim Aracı (Forensic Tool)
 
-*Dijital delilleri tek bir yerde toplayın. Disk, RAM, Android ve iOS backup edinimi.*
+*Windows, Linux, Android ve iOS için bütünleşik adli bilişim platformu. Disk, RAM, mantıksal edinim ve yedekleme analizi.*
 
 [Web Sitesi](https://amele.noirlang.tr) | [Sürümler](https://github.com/noirlang/amele/releases) | [Katkıda Bulunma](CONTRIBUTING.md) | [Güvenlik](SECURITY.md) | [Linux Ajanı](https://github.com/noirlang/amele-linux) | [Windows Ajanı](https://github.com/noirlang/amele-win)
 
