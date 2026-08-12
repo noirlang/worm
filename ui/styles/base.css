@@ -2319,46 +2319,12 @@ html, body {
   transform: translate3d(0, 0, 0) !important;
 }
 
-/* Sleek SVG Lock & Unlock Indicators */
-.nav-item {
-  position: relative;
-}
-
-.nav-lock-indicator {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: all 220ms ease;
-}
-
-.nav-lock-indicator svg {
-  width: 13px;
-  height: 13px;
-}
-
-.nav-lock-indicator.locked {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.14);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-}
-
-.nav-lock-indicator.unlocked {
-  color: #44e6d0;
-  background: rgba(68, 230, 208, 0.14);
-  border: 1px solid rgba(68, 230, 208, 0.4);
-}
-
 .nav-item.is-locked,
 .action-tile.is-locked {
   opacity: 0.42 !important;
   pointer-events: none !important;
   cursor: not-allowed !important;
-  filter: grayscale(0.6);
+  filter: grayscale(0.5);
 }
 
 .nav-item.is-locked:hover,
