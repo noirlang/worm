@@ -26,6 +26,7 @@ The app runs as a real desktop window on Linux and Windows.
 - **Remote memory acquisition:** start, pause, resume, stop, track, and download RAM dumps from agents.
 - **Android tools:** check ADB, list devices, collect logical data, collect filesystem data, capture volatile data, and analyze Android case outputs.
 - **iOS tools:** normalize unencrypted or already decrypted iTunes/Finder backups into a browsable Backup2FS-style file system, with per-file MD5/SHA1/SHA256 CSV logging.
+- **Docker tools:** audit container escape risks, scan environment variables for exposed secrets/API keys, extract raw configs and logs, package runtime Overlay2 UpperDir drift layers, and stream remote container evidence via Linux Agent.
 - **Online profiles:** connect an `amele.noirlang.tr` account, display synced roles such as BDFL or platform maintainer, and require verified membership for Android/iOS tools.
 - **Case management:** store acquisitions, notes, hashes, Android outputs, iOS outputs, reports, and `case_manifest.json` integrity inventories under selected cases.
 - **Hashing and verification:** calculate MD5, SHA1, SHA256, and SHA512; generate sidecar hashes for acquired evidence.
@@ -58,6 +59,7 @@ Module documentation:
 - [Linux forensic module](docs/linux.md)
 - [Android forensic module](docs/android.md)
 - [iOS forensic module](docs/ios.md)
+- [Docker forensic module](docs/docker.md)
 
 Install the Rust stable toolchain:
 
@@ -298,6 +300,23 @@ Tarayıcı tabanlı hata ayıklama arayüzünü (debug UI) açın:
 
 ```bash
 cargo run -- ui-browser
+```
+
+## Komut Satırı Kullanımı (CLI)
+
+```bash
+# Docker durumu, konteyner listesi ve loglar
+amele docker-status
+amele docker-list
+amele docker-logs <container_id> 200
+
+# Yerel konteyner delillerini (Overlay2 UpperDir drift, config, log) vakaya edin
+amele docker-acquire <container_id> Case_Docker_001
+
+# Uzak Linux Agent üzerinden Docker inceleme ve edinimi
+amele docker-remote-status 192.168.1.100 8080 mysecrettoken
+amele docker-remote-list 192.168.1.100 8080 mysecrettoken
+amele docker-remote-acquire 192.168.1.100 8080 <container_id> Case_Remote_Docker mysecrettoken
 ```
 
 ## Online Profil Güvenliği

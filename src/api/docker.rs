@@ -80,7 +80,11 @@ pub fn docker_logs_endpoint(body: &[u8]) -> Response {
         Err(err) => return json_error(400, format!("Gecersiz istek JSON: {}", err)),
     };
 
-    let path_opt = req.custom_docker_root.as_deref().filter(|s| !s.trim().is_empty()).map(Path::new);
+    let path_opt = req
+        .custom_docker_root
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(Path::new);
     let tail = req.tail.unwrap_or(200);
 
     match get_container_logs(&req.container_id, tail, path_opt) {
@@ -139,10 +143,7 @@ pub fn docker_acquire_local_endpoint(body: &[u8]) -> Response {
                 );
             }
             Err(err) => {
-                append_acquisition_log(
-                    &job_id_clone,
-                    &format!("Docker edinim hatası: {}", err),
-                );
+                append_acquisition_log(&job_id_clone, &format!("Docker edinim hatası: {}", err));
                 fail_acquisition_job_with_message(
                     &job_id_clone,
                     err.to_string(),
@@ -211,15 +212,17 @@ pub fn docker_remote_logs_endpoint(body: &[u8]) -> Response {
     };
 
     match RemoteConnection::connect(&req.ip, req.port, req.token) {
-        Ok(mut conn) => match conn.get_docker_container_logs(&container_id, req.tail.unwrap_or(200)) {
-            Ok(logs) => json_ok(json!({
-                "durum": "ok",
-                "container_id": container_id,
-                "logs": logs,
-                "toplam": logs.len(),
-            })),
-            Err(err) => json_error(500, err.to_string()),
-        },
+        Ok(mut conn) => {
+            match conn.get_docker_container_logs(&container_id, req.tail.unwrap_or(200)) {
+                Ok(logs) => json_ok(json!({
+                    "durum": "ok",
+                    "container_id": container_id,
+                    "logs": logs,
+                    "toplam": logs.len(),
+                })),
+                Err(err) => json_error(500, err.to_string()),
+            }
+        }
         Err(err) => json_error(500, err.to_string()),
     }
 }
@@ -232,7 +235,10 @@ pub fn docker_remote_acquire_endpoint(body: &[u8]) -> Response {
     };
 
     let case_name = req.case_name.clone().unwrap_or_else(|| {
-        format!("VAKA_DOCKER_REMOTE_{}", Local::now().format("%Y%m%d_%H%M%S"))
+        format!(
+            "VAKA_DOCKER_REMOTE_{}",
+            Local::now().format("%Y%m%d_%H%M%S")
+        )
     });
 
     let base_dir = default_case_base_dir();
@@ -263,7 +269,10 @@ pub fn docker_remote_acquire_endpoint(body: &[u8]) -> Response {
     thread::spawn(move || {
         append_acquisition_log(
             &job_id_clone,
-            &format!("Uzak Docker edinimi başlatıldı: {} ({}:{})", container_id, req.ip, req.port),
+            &format!(
+                "Uzak Docker edinimi başlatıldı: {} ({}:{})",
+                container_id, req.ip, req.port
+            ),
         );
 
         let mut conn = match RemoteConnection::connect(&req.ip, req.port, req.token) {
@@ -322,7 +331,10 @@ pub fn docker_remote_acquire_endpoint(body: &[u8]) -> Response {
                 finish_acquisition_job_with_message(
                     &job_id_clone,
                     result_json,
-                    &format!("Uzak Docker delili aktarıldı ({} bytes)", result.bytes_transferred),
+                    &format!(
+                        "Uzak Docker delili aktarıldı ({} bytes)",
+                        result.bytes_transferred
+                    ),
                 );
             }
             Err(err) => {

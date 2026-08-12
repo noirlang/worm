@@ -870,7 +870,8 @@ function profilePage({ t, icon, state, pageTitle, escapeHtml }) {
             images: String(item.output_count || 0),
             ram: String(item.ram_count || 0),
             android: String(item.android_count || 0),
-            ios: String(item.ios_count || 0)
+            ios: String(item.ios_count || 0),
+            docker: String(item.docker_count || 0)
           })}</span>
         </article>
       `).join("")

@@ -491,10 +491,7 @@ pub fn list_containers(custom_root: Option<&Path>) -> AmeleResult<Vec<DockerCont
             .get("Running")
             .and_then(|r| r.as_bool())
             .unwrap_or(false);
-        let pid = state_val
-            .get("Pid")
-            .and_then(|p| p.as_u64())
-            .unwrap_or(0) as u32;
+        let pid = state_val.get("Pid").and_then(|p| p.as_u64()).unwrap_or(0) as u32;
         let exit_code = state_val
             .get("ExitCode")
             .and_then(|e| e.as_i64())
@@ -631,8 +628,7 @@ pub fn list_containers(custom_root: Option<&Path>) -> AmeleResult<Vec<DockerCont
         }
 
         let secrets_found = scan_env_for_secrets(&env_list);
-        let (risk_level, risk_reasons) =
-            evaluate_container_risk(&config_v2, &host_config, &mounts);
+        let (risk_level, risk_reasons) = evaluate_container_risk(&config_v2, &host_config, &mounts);
 
         let privileged = host_config
             .get("Privileged")
@@ -735,10 +731,7 @@ where
     if !container_dir.exists() {
         return Err(AmeleError::new(
             HataKodu::DosyaAcilamadi,
-            format!(
-                "Konteyner dizini bulunamadı: {}",
-                container_dir.display()
-            ),
+            format!("Konteyner dizini bulunamadı: {}", container_dir.display()),
         ));
     }
 
@@ -858,7 +851,11 @@ where
     let mut diff_size_bytes = 0;
 
     if req.acquire_diff {
-        progress_callback("Overlay2 UpperDir (Drift) katmanı tespit ediliyor...", 55, 100);
+        progress_callback(
+            "Overlay2 UpperDir (Drift) katmanı tespit ediliyor...",
+            55,
+            100,
+        );
 
         let upper_dir_path = config_v2
             .get("GraphDriver")
@@ -869,7 +866,11 @@ where
 
         if let Some(upper_dir) = upper_dir_path {
             if upper_dir.exists() && upper_dir.is_dir() {
-                progress_callback("Overlay2 UpperDir dosyaları .tar.gz olarak arşivleniyor...", 70, 100);
+                progress_callback(
+                    "Overlay2 UpperDir dosyaları .tar.gz olarak arşivleniyor...",
+                    70,
+                    100,
+                );
 
                 let tar_gz_file = target_case_dir.join("upper_drift_files.tar.gz");
                 let out_file = File::create(&tar_gz_file).map_err(|e| {
@@ -901,7 +902,11 @@ where
         }
     }
 
-    progress_callback("Bütünlük manifestosu (manifest.csv) oluşturuluyor...", 90, 100);
+    progress_callback(
+        "Bütünlük manifestosu (manifest.csv) oluşturuluyor...",
+        90,
+        100,
+    );
 
     let manifest_path = target_case_dir.join("manifest.csv");
     let mut manifest_content = String::from("Dosya_Adi,Boyut_Byte,SHA256\n");
@@ -909,7 +914,8 @@ where
         let fpath = target_case_dir.join(file_name);
         if fpath.exists() {
             let size = fs::metadata(&fpath).map(|m| m.len()).unwrap_or(0);
-            let sha = calculate_file_hash(&fpath, HashAlgorithm::Sha256).unwrap_or_else(|_| "HATA".to_string());
+            let sha = calculate_file_hash(&fpath, HashAlgorithm::Sha256)
+                .unwrap_or_else(|_| "HATA".to_string());
             manifest_content.push_str(&format!("{},{},{}\n", file_name, size, sha));
         }
     }

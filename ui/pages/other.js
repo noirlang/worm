@@ -96,7 +96,7 @@ export function detailPanel({ tab, t, icon, state, pickerField, field, escapeHtm
 }
 
 function historyItem(item, t, icon, escapeHtml) {
-  const platform = item.platform === "ios" ? "ios" : "android";
+  const platform = item.platform === "ios" ? "ios" : item.platform === "docker" ? "docker" : "android";
   const statusClass = item.status === "completed" ? "ok" : "warn";
   const statusText = item.status === "completed" ? t("acquisition.history.completed") : t("acquisition.history.warnings");
   const metrics = [

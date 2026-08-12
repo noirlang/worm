@@ -7,6 +7,7 @@ use amele::android;
 use amele::android_analysis;
 use amele::disk;
 use amele::disk_analysis;
+use amele::docker::{self, DockerAcquisitionRequest};
 use amele::evidence::EvidenceVault;
 use amele::hash::{self, HashAlgorithm};
 use amele::ios;
@@ -98,6 +99,14 @@ fn main() {
         Some("android-case-analysis") => android_case_analysis_command(args.collect()),
         Some("ios-backup-profile") => ios_backup_profile_command(args.collect()),
         Some("ios-backup-normalize") => ios_backup_normalize_command(args.collect()),
+        Some("docker-status") => docker_status_command(args.collect()),
+        Some("docker-list") | Some("docker-containers") => docker_list_command(args.collect()),
+        Some("docker-logs") => docker_logs_command(args.collect()),
+        Some("docker-acquire") => docker_acquire_command(args.collect()),
+        Some("docker-remote-status") => docker_remote_status_command(args.collect()),
+        Some("docker-remote-list") => docker_remote_list_command(args.collect()),
+        Some("docker-remote-logs") => docker_remote_logs_command(args.collect()),
+        Some("docker-remote-acquire") => docker_remote_acquire_command(args.collect()),
         Some("disk-list-helper") => disk_list_helper_command(args.collect()),
         Some("image-helper") => image_helper_command(args.collect()),
         Some("ram-helper") => ram_helper_command(args.collect()),
@@ -274,6 +283,14 @@ fn print_help() {
                android-case-analysis <case>             Android case output analysis summary\n\
                ios-backup-profile <backup_dir>          Read iOS backup metadata\n\
                ios-backup-normalize <backup_dir> <case> Normalize iOS backup into case ios folder\n\
+               docker-status [custom_root]             Inspect Docker daemon or mounted root\n\
+               docker-list [custom_root]               List containers, escape risks and secrets\n\
+               docker-logs <id> [tail] [custom_root]   Read container logs\n\
+               docker-acquire <id> [case] [custom_root] Acquire UpperDir diff + configs + logs\n\
+               docker-remote-status <ip> <port> [token] Check remote Docker status via agent\n\
+               docker-remote-list <ip> <port> [token]  List remote containers via agent\n\
+               docker-remote-logs <ip> <port> <id> [tail] [token] Fetch remote container logs\n\
+               docker-remote-acquire <ip> <port> <id> [case] [token] Acquire remote container evidence\n\
                image-analyze <image> [mount_dir]       Disk image analysis summary\n\
                ram-summary <ram> <windows|linux> [symbols]\n\
                ram-strings <ram>                       RAM IOC/string scan\n\
@@ -328,6 +345,14 @@ fn print_help() {
                android-case-analysis <vaka>             Android vaka cikti analiz ozeti\n\
                ios-backup-profile <backup_klasoru>      iOS backup metadata bilgisini yazdir\n\
                ios-backup-normalize <backup_klasoru> <vaka> iOS backup'i vaka ios klasorune normalize et\n\
+               docker-status [kok_dizin]               Docker daemon veya bagli kok dizini denetle\n\
+               docker-list [kok_dizin]                 Konteynerleri, riskleri ve secretlari listele\n\
+               docker-logs <id> [tail] [kok_dizin]     Konteyner loglarini oku\n\
+               docker-acquire <id> [vaka] [kok_dizin]  UpperDir drift + config + loglari vakaya edin\n\
+               docker-remote-status <ip> <port> [token] Agent ile uzak Docker durumunu sorgula\n\
+               docker-remote-list <ip> <port> [token]  Agent ile uzak konteynerleri listele\n\
+               docker-remote-logs <ip> <port> <id> [tail] [token] Uzak konteyner loglarini cek\n\
+               docker-remote-acquire <ip> <port> <id> [vaka] [token] Uzak konteyner delillerini vakaya aktar\n\
                image-analyze <imaj> [mount_klasoru]    Disk imaj analiz ozeti\n\
                ram-summary <ram> <windows|linux> [symbols]\n\
                ram-strings <ram>                       RAM IOC/dizgi taramasi\n\
@@ -896,6 +921,176 @@ fn ios_backup_normalize_command(args: Vec<String>) -> Result<(), String> {
         || false,
     )
     .map_err(|err| crate_diagnostic(err.to_string()))?;
+    print_json(&result)
+}
+
+/// Docker sistem durumunu veya bağlanmış dizini denetler.
+fn docker_status_command(args: Vec<String>) -> Result<(), String> {
+    let custom_root = args.first().map(Path::new);
+    let status = docker::check_docker_status(custom_root);
+    print_json(&status)
+}
+
+/// Docker konteynerlerini listeler ve güvenlik/kaçış risk analizini gösterir.
+fn docker_list_command(args: Vec<String>) -> Result<(), String> {
+    let custom_root = args.first().map(Path::new);
+    let containers = docker::list_containers(custom_root).map_err(|err| err.to_string())?;
+    print_json(&containers)
+}
+
+/// Belirtilen konteynerin log kayıtlarını ekrana basar.
+fn docker_logs_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err(t_cli(
+            "Kullanim: docker-logs <konteyner_id> [tail] [kok_dizin]",
+            "Usage: docker-logs <container_id> [tail] [custom_root]",
+        ));
+    }
+    let cid = &args[0];
+    let tail = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(200);
+    let custom_root = args.get(2).map(Path::new);
+    let logs = docker::get_container_logs(cid, tail, custom_root).map_err(|err| err.to_string())?;
+    print_json(&logs)
+}
+
+/// Yerel konteyner delillerini (Overlay2 diff, konfigürasyon, loglar) vakaya toplar.
+fn docker_acquire_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err(t_cli(
+            "Kullanim: docker-acquire <konteyner_id> [vaka_adi] [kok_dizin]",
+            "Usage: docker-acquire <container_id> [case_name] [custom_root]",
+        ));
+    }
+    let cid = args[0].clone();
+    let case_name = args.get(1).cloned();
+    let custom_root = args.get(2).cloned();
+
+    let req = DockerAcquisitionRequest {
+        container_id: cid,
+        acquire_diff: true,
+        acquire_logs: true,
+        acquire_config: true,
+        case_name,
+        custom_docker_root: custom_root,
+    };
+
+    let base_dir = amele::api::default_case_base_dir();
+    let result = docker::acquire_container_evidence(&req, base_dir, |msg, done, total| {
+        print_progress("docker", done, total);
+        eprintln!("{msg}");
+    })
+    .map_err(|err| err.to_string())?;
+
+    print_json(&result)
+}
+
+/// Uzak agent'tan Docker daemon durumunu çeker.
+fn docker_remote_status_command(args: Vec<String>) -> Result<(), String> {
+    if args.len() < 2 {
+        return Err(t_cli(
+            "Kullanim: docker-remote-status <ip> <port> [token]",
+            "Usage: docker-remote-status <ip> <port> [token]",
+        ));
+    }
+    let ip = &args[0];
+    let port = parse_port(&args[1])?;
+    let token = args.get(2).cloned();
+    let mut conn = RemoteConnection::connect(ip, port, token).map_err(|err| err.to_string())?;
+    let status = conn.docker_status().map_err(|err| err.to_string())?;
+    print_json(&status)
+}
+
+/// Uzak agent üzerindeki Docker konteynerlerini listeler.
+fn docker_remote_list_command(args: Vec<String>) -> Result<(), String> {
+    if args.len() < 2 {
+        return Err(t_cli(
+            "Kullanim: docker-remote-list <ip> <port> [token]",
+            "Usage: docker-remote-list <ip> <port> [token]",
+        ));
+    }
+    let ip = &args[0];
+    let port = parse_port(&args[1])?;
+    let token = args.get(2).cloned();
+    let mut conn = RemoteConnection::connect(ip, port, token).map_err(|err| err.to_string())?;
+    let containers = conn
+        .list_docker_containers()
+        .map_err(|err| err.to_string())?;
+    print_json(&containers)
+}
+
+/// Uzak agent üzerindeki konteynerin loglarını çeker.
+fn docker_remote_logs_command(args: Vec<String>) -> Result<(), String> {
+    if args.len() < 3 {
+        return Err(t_cli(
+            "Kullanim: docker-remote-logs <ip> <port> <konteyner_id> [tail] [token]",
+            "Usage: docker-remote-logs <ip> <port> <container_id> [tail] [token]",
+        ));
+    }
+    let ip = &args[0];
+    let port = parse_port(&args[1])?;
+    let cid = &args[2];
+    let tail = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(200);
+    let token = args.get(4).cloned();
+    let mut conn = RemoteConnection::connect(ip, port, token).map_err(|err| err.to_string())?;
+    let logs = conn
+        .get_docker_container_logs(cid, tail)
+        .map_err(|err| err.to_string())?;
+    print_json(&logs)
+}
+
+/// Uzak agent üzerindeki konteyner delillerini vaka klasörüne aktarır.
+fn docker_remote_acquire_command(args: Vec<String>) -> Result<(), String> {
+    if args.len() < 3 {
+        return Err(t_cli(
+            "Kullanim: docker-remote-acquire <ip> <port> <konteyner_id> [vaka_adi] [token]",
+            "Usage: docker-remote-acquire <ip> <port> <container_id> [case_name] [token]",
+        ));
+    }
+    let ip = &args[0];
+    let port = parse_port(&args[1])?;
+    let cid = &args[2];
+    let case_name = args.get(3).cloned().unwrap_or_else(|| {
+        format!(
+            "VAKA_DOCKER_REMOTE_{}",
+            Local::now().format("%Y%m%d_%H%M%S")
+        )
+    });
+    let token = args.get(4).cloned();
+
+    let vault = cli_case_vault(&case_name)?;
+    let short_id = if cid.len() >= 12 { &cid[..12] } else { cid };
+    let target_dir = vault.docker_dir.join(format!("remote_{}", short_id));
+    fs::create_dir_all(&target_dir).map_err(|err| err.to_string())?;
+    let target_tar = target_dir.join("docker_evidence.tar.gz");
+
+    let mut conn = RemoteConnection::connect(ip, port, token).map_err(|err| err.to_string())?;
+    let result = conn
+        .acquire_remote_docker(cid, true, true, true, &target_tar, None, |done, total| {
+            print_progress("docker-remote", done, total);
+        })
+        .map_err(|err| err.to_string())?;
+
+    let meta_path = target_dir.join("docker_metadata.json");
+    let _ = fs::write(
+        &meta_path,
+        json!({
+            "edinim_zamani": Local::now().to_rfc3339(),
+            "konteyner_id": cid,
+            "isim": format!("remote_{}", short_id),
+            "sha256": result.sha256,
+            "boyut": result.bytes_transferred,
+        })
+        .to_string(),
+    );
+
+    let manifest_path = target_dir.join("manifest.csv");
+    let manifest_content = format!(
+        "Dosya_Adi,Boyut_Byte,SHA256\ndocker_evidence.tar.gz,{},{}\n",
+        result.bytes_transferred,
+        result.sha256.as_deref().unwrap_or("HATA")
+    );
+    let _ = fs::write(&manifest_path, manifest_content);
+
     print_json(&result)
 }
 

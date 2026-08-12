@@ -3,7 +3,7 @@ use crate::api::{
     current_evidence_case, current_evidence_vault, default_case_base_dir, evidence_subdir,
     report_evidence_vault, sanitize_case_name, set_current_evidence_case,
 };
-use crate::evidence::EvidenceVault;
+use crate::evidence::{EvidenceVault, relative_case_path};
 use crate::report::{self, ReportFormat, ReportInfo};
 use crate::server::{Response, json_error, json_ok};
 use chrono::Local;
@@ -370,6 +370,7 @@ fn acquisition_history_for_vault(vault: &EvidenceVault) -> Vec<Value> {
     let mut items = Vec::new();
     collect_android_history(&vault.android_dir, &mut items);
     collect_ios_history(&vault.ios_dir, &mut items);
+    collect_docker_history(&vault.docker_dir, &mut items);
     items.sort_by(|left, right| {
         right["sort_key"]
             .as_str()
@@ -399,6 +400,70 @@ fn collect_ios_history(ios_dir: &Path, items: &mut Vec<Value>) {
         };
         items.push(item);
     }
+}
+
+fn collect_docker_history(docker_dir: &Path, items: &mut Vec<Value>) {
+    let mut manifests = Vec::new();
+    collect_named_files_recursive(docker_dir, "docker_metadata.json", &mut manifests);
+    for meta_path in manifests {
+        let Some(item) = docker_history_item(docker_dir, &meta_path) else {
+            continue;
+        };
+        items.push(item);
+    }
+}
+
+fn docker_history_item(docker_dir: &Path, meta_path: &Path) -> Option<Value> {
+    let content = fs::read_to_string(meta_path).ok()?;
+    let meta: Value = serde_json::from_str(&content).ok()?;
+    let container_id = meta
+        .get("konteyner_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let name = meta
+        .get("isim")
+        .and_then(|v| v.as_str())
+        .unwrap_or("container");
+    let time_str = meta
+        .get("edinim_zamani")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let parent_dir = meta_path.parent()?;
+    let rel_dir = relative_case_path(docker_dir, parent_dir);
+    let short_id = if container_id.len() >= 12 {
+        &container_id[..12]
+    } else {
+        container_id
+    };
+    let image = meta
+        .get("config_v2")
+        .and_then(|c| c.get("Config"))
+        .and_then(|c| c.get("Image"))
+        .and_then(|i| i.as_str())
+        .unwrap_or("-");
+    let bytes = meta.get("boyut").and_then(|v| v.as_u64()).unwrap_or(0);
+
+    Some(json!({
+        "id": format!("docker_{}", short_id),
+        "platform": "docker",
+        "title": format!("Docker: {} ({})", name, short_id),
+        "subtitle": format!("İmaj: {}", image),
+        "generated_at": time_str,
+        "timestamp": time_str,
+        "sort_key": time_str,
+        "status": "completed",
+        "total_bytes": bytes,
+        "folder": parent_dir.to_string_lossy().to_string(),
+        "relative_folder": rel_dir,
+        "output_dir": parent_dir.to_string_lossy().to_string(),
+        "relative_output": rel_dir,
+        "manifest_path": meta_path.to_string_lossy().to_string(),
+        "summary": {
+            "container_id": container_id,
+            "container_name": name,
+            "image": image,
+        }
+    }))
 }
 
 fn android_history_item(android_dir: &Path, manifest_path: &Path) -> Option<Value> {
@@ -623,9 +688,26 @@ mod tests {
         )
         .unwrap();
 
+        let docker_run = vault.docker_dir.join("web_nginx_a1b2c3d4e5f6");
+        fs::create_dir_all(&docker_run).unwrap();
+        fs::write(
+            docker_run.join("docker_metadata.json"),
+            serde_json::to_string_pretty(&json!({
+                "edinim_zamani": "2026-07-27T12:00:00+03:00",
+                "konteyner_id": "a1b2c3d4e5f67890abcdef123456",
+                "isim": "web_nginx",
+                "config_v2": {
+                    "Config": { "Image": "nginx:alpine" }
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
         let history = acquisition_history_for_vault(&vault);
-        assert_eq!(history.len(), 2);
+        assert_eq!(history.len(), 3);
         assert!(history.iter().any(|item| item["platform"] == "android"));
         assert!(history.iter().any(|item| item["platform"] == "ios"));
+        assert!(history.iter().any(|item| item["platform"] == "docker"));
     }
 }

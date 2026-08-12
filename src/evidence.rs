@@ -19,6 +19,7 @@ pub struct EvidenceSummary {
     pub output_count: usize,
     pub android_count: usize,
     pub ios_count: usize,
+    pub docker_count: usize,
     pub hash_count: usize,
     pub report_count: usize,
     pub manifest_path: PathBuf,
@@ -33,6 +34,7 @@ pub struct EvidenceVault {
     pub ram_dir: PathBuf,
     pub android_dir: PathBuf,
     pub ios_dir: PathBuf,
+    pub docker_dir: PathBuf,
     pub reports_dir: PathBuf,
     pub hash_dir: PathBuf,
     pub notes_dir: PathBuf,
@@ -55,6 +57,7 @@ impl EvidenceVault {
         let ram_dir = case_dir.join("ram");
         let android_dir = case_dir.join("android");
         let ios_dir = case_dir.join("ios");
+        let docker_dir = case_dir.join("docker");
         let reports_dir = case_dir.join("raporlar");
         let hash_dir = case_dir.join("hash");
         let notes_dir = case_dir.join("notlar");
@@ -66,6 +69,7 @@ impl EvidenceVault {
             &ram_dir,
             &android_dir,
             &ios_dir,
+            &docker_dir,
             &reports_dir,
             &hash_dir,
             &notes_dir,
@@ -110,6 +114,7 @@ impl EvidenceVault {
             ram_dir,
             android_dir,
             ios_dir,
+            docker_dir,
             reports_dir,
             hash_dir,
             notes_dir,
@@ -220,6 +225,7 @@ impl EvidenceVault {
             output_count: self.list_files("ciktilar")?.len(),
             android_count: self.list_files("android")?.len(),
             ios_count: self.list_files("ios")?.len(),
+            docker_count: self.list_files("docker")?.len(),
             hash_count: self.list_files("hash")?.len(),
             report_count: self.list_files("raporlar")?.len(),
             manifest_path: self.case_manifest_path(),
@@ -246,6 +252,7 @@ impl EvidenceVault {
                 "ram": &self.ram_dir,
                 "android": &self.android_dir,
                 "ios": &self.ios_dir,
+                "docker": &self.docker_dir,
                 "reports": &self.reports_dir,
                 "hash": &self.hash_dir,
                 "notes": &self.notes_dir,
@@ -255,6 +262,7 @@ impl EvidenceVault {
                 "ram": count_entries_recursive(&self.ram_dir),
                 "android": count_entries_recursive(&self.android_dir),
                 "ios": count_entries_recursive(&self.ios_dir),
+                "docker": count_entries_recursive(&self.docker_dir),
                 "reports": count_entries_recursive(&self.reports_dir),
                 "hash": count_entries_recursive(&self.hash_dir),
                 "notes": count_entries_recursive(&self.notes_dir),
@@ -287,6 +295,7 @@ impl EvidenceVault {
             "ram" => &self.ram_dir,
             "android" => &self.android_dir,
             "ios" => &self.ios_dir,
+            "docker" => &self.docker_dir,
             "raporlar" => &self.reports_dir,
             "hash" => &self.hash_dir,
             "notlar" => &self.notes_dir,
@@ -364,7 +373,7 @@ fn case_manifest_file_json(root: &Path, path: &Path, metadata: &fs::Metadata) ->
     })
 }
 
-fn relative_case_path(root: &Path, path: &Path) -> String {
+pub fn relative_case_path(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
         .unwrap_or(path)
         .to_string_lossy()

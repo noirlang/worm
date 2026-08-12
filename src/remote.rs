@@ -602,7 +602,9 @@ impl RemoteConnection {
     }
 
     /// Uzak agent üzerindeki Docker konteynerlerini listeler ve güvenlik analizini çeker.
-    pub fn list_docker_containers(&mut self) -> AmeleResult<Vec<crate::docker::DockerContainerSummary>> {
+    pub fn list_docker_containers(
+        &mut self,
+    ) -> AmeleResult<Vec<crate::docker::DockerContainerSummary>> {
         self.send_json(&json!({ "komut": "docker_listele" }))?;
         let response = self.read_json_line()?;
         if !is_ok(&response) {
@@ -620,7 +622,9 @@ impl RemoteConnection {
 
         let mut list = Vec::new();
         for item in containers {
-            if let Ok(summary) = serde_json::from_value::<crate::docker::DockerContainerSummary>(item) {
+            if let Ok(summary) =
+                serde_json::from_value::<crate::docker::DockerContainerSummary>(item)
+            {
                 list.push(summary);
             }
         }
