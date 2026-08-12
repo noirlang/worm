@@ -121,6 +121,10 @@ function boundPickerField(label, id, value, type = "file") {
 }
 
 function setRoute(route) {
+  if (isMobileToolsRoute(route) && !onlineMobileToolsAllowed()) {
+    devLog("WARN", "ui:router", `Mobile route blocked (locked): ${route}`, apiRequest, backendReady);
+    return;
+  }
   if (route.startsWith("workflow:")) {
     const workflow = workflows[route.split(":")[1]];
     if (workflow && isLocalWorkflowBlocked(workflow)) {
@@ -678,16 +682,7 @@ function render() {
     if (r === "android" || r === "ios") {
       button.classList.toggle("is-locked", !mobileAllowed);
       button.classList.toggle("is-unlocked", mobileAllowed);
-
-      let lockBadge = button.querySelector(".route-lock-badge");
-      if (!lockBadge) {
-        lockBadge = document.createElement("span");
-        lockBadge.className = "route-lock-badge";
-        button.appendChild(lockBadge);
-      }
-      lockBadge.innerHTML = icon(mobileAllowed ? "unlock" : "lock");
-      lockBadge.className = `route-lock-badge ${mobileAllowed ? "unlocked" : "locked"}`;
-      lockBadge.title = mobileAllowed ? "Yetkili (Mobile Tools)" : "Kilitli (Yetki / Lisans Gerekli)";
+      button.setAttribute("title", mobileAllowed ? "Yetkili (Mobile Tools)" : "Kilitli (Yetki / Lisans Gerekli)");
     }
   });
 

@@ -2318,3 +2318,61 @@ html, body {
 .forensic-card:active {
   transform: translate3d(0, 0, 0) !important;
 }
+
+/* Sleek Lock & Unlock Indicators */
+.nav-item,
+.action-tile {
+  position: relative;
+}
+
+.nav-item.is-locked,
+.action-tile.is-locked {
+  opacity: 0.42 !important;
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.6);
+}
+
+.nav-item.is-locked:hover,
+.action-tile.is-locked:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.nav-item.is-locked::after {
+  content: "🔒";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.action-tile.is-locked::after {
+  content: "🔒";
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 15px;
+  opacity: 0.75;
+}
+
+.nav-item.is-unlocked::after {
+  content: "🔓";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.action-tile.is-unlocked::after {
+  content: "🔓";
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 15px;
+  opacity: 0.85;
+}

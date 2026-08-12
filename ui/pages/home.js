@@ -25,15 +25,10 @@ export function homePage({ t, icon, assetPath, theme, state }) {
 function homeTile(title, desc, iconName, route, accent, icon, state) {
   const isMobile = route === "android" || route === "ios";
   const allowed = Boolean(state?.mobileToolsAccess?.allowed);
-  const lockBadge = isMobile ? `
-    <span class="tile-lock-badge ${allowed ? "unlocked" : "locked"}" title="${allowed ? "Yetkili (Mobile Tools)" : "Kilitli (Yetki / Lisans Gerekli)"}">
-      ${icon(allowed ? "unlock" : "lock")}
-    </span>
-  ` : "";
+  const statusClass = isMobile ? (allowed ? "is-unlocked" : "is-locked") : "";
 
   return `
-    <button class="action-tile ${isMobile ? (allowed ? "is-unlocked" : "is-locked") : ""}" data-route="${route}" style="--accent:${accent}">
-      ${lockBadge}
+    <button class="action-tile ${statusClass}" data-route="${route}" style="--accent:${accent}">
       <span class="tile-icon">${icon(iconName)}</span>
       <span>
         <h3>${title}</h3>
