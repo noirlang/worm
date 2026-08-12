@@ -430,13 +430,15 @@ function profileInitials(profile) {
 
 function getAvatarUrl(profile) {
   if (!profile) return "";
-  const rawUrl = profile.avatar_url || profile.avatarUrl || profile.online?.avatar_url || profile.online?.avatarUrl || "";
+  let rawUrl = profile.avatar_url || profile.avatarUrl || profile.online?.avatar_url || profile.online?.avatarUrl || "";
   if (!rawUrl) return "";
+  rawUrl = rawUrl.replace("://www.amele.noirlang.tr", "://amele.noirlang.tr");
   if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://") || rawUrl.startsWith("data:")) {
     return rawUrl;
   }
   if (rawUrl.startsWith("/")) {
-    const base = profile.online?.apiBase || profile.online?.api_base || profile.apiBase || profile.api_base || "https://aamele-noirlang-tr.onrender.com";
+    let base = profile.online?.apiBase || profile.online?.api_base || profile.apiBase || profile.api_base || "https://amele.noirlang.tr";
+    base = base.replace("://www.amele.noirlang.tr", "://amele.noirlang.tr");
     return `${base.replace(/\/+$/, "")}${rawUrl}`;
   }
   return rawUrl;
@@ -447,8 +449,14 @@ function renderProfileAvatar(profile, extraClass = "") {
   const initials = profileInitials(profile || {});
   const sizeClass = extraClass ? ` ${extraClass}` : "";
   if (avatarUrl) {
-    const rawPath = (profile.avatar_url || profile.avatarUrl || profile.online?.avatar_url || profile.online?.avatarUrl || "");
-    const altBase = rawPath.startsWith("/") ? `https://amele.noirlang.tr${rawPath}` : "";
+    let rawPath = (profile.avatar_url || profile.avatarUrl || profile.online?.avatar_url || profile.online?.avatarUrl || "");
+    rawPath = rawPath.replace("://www.amele.noirlang.tr", "://amele.noirlang.tr");
+    let altBase = "";
+    if (rawPath.startsWith("/")) {
+      altBase = `https://aamele-noirlang-tr.onrender.com${rawPath}`;
+    } else if (rawPath.includes("amele.noirlang.tr/api/images/")) {
+      altBase = rawPath.replace("://amele.noirlang.tr", "://aamele-noirlang-tr.onrender.com");
+    }
     return `<span class="profile-avatar${sizeClass}"><img src="${escapeHtml(avatarUrl)}" alt="Avatar" class="avatar-img" data-alt-src="${escapeHtml(altBase)}" onerror="if(this.dataset.altSrc && this.src !== this.dataset.altSrc){ this.src = this.dataset.altSrc; this.dataset.altSrc = ''; } else { this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='inline-grid'; }" /><span class="avatar-fallback" style="display:none;">${initials}</span></span>`;
   }
   return `<span class="profile-avatar${sizeClass}">${initials}</span>`;

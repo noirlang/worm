@@ -740,9 +740,18 @@ pub fn load_profile_store() -> AmeleResult<ProfileStore> {
         )
     })?;
     for profile in &mut store.profiles {
+        if let Some(avatar) = &mut profile.avatar_url {
+            *avatar = avatar.replace("://www.amele.noirlang.tr", "://amele.noirlang.tr");
+        }
         if let Some(online) = &mut profile.online {
             if online.api_base.is_none() {
                 online.api_base = load_online_api_base(&profile.username);
+            }
+            if let Some(base) = &mut online.api_base {
+                *base = base.replace("://www.amele.noirlang.tr", "://amele.noirlang.tr");
+            }
+            if let Some(avatar) = &mut online.avatar_url {
+                *avatar = avatar.replace("://www.amele.noirlang.tr", "://amele.noirlang.tr");
             }
             if profile.avatar_url.is_none() {
                 profile.avatar_url = online.avatar_url.clone();
@@ -1342,7 +1351,7 @@ fn online_profile_from_user(
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
-        avatar_url: user.avatar_url,
+        avatar_url: sanitize_avatar_url(user.avatar_url),
         api_base,
         roles,
         has_license: user.has_license || has_active_license,
@@ -1352,6 +1361,19 @@ fn online_profile_from_user(
         worked_case_types,
         mobile_tools_enabled,
     }
+}
+
+fn sanitize_avatar_url(url: Option<String>) -> Option<String> {
+    url.and_then(|u| {
+        let trimmed = u
+            .trim()
+            .replace("://www.amele.noirlang.tr", "://amele.noirlang.tr");
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
 }
 
 fn online_full_name(online: &OnlineProfile) -> String {
