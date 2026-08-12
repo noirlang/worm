@@ -58,7 +58,7 @@ Version: $VERSION
 Section: utils
 Priority: optional
 Architecture: amd64
-Maintainer: favilances <favilances@proton.me>
+Maintainer: noirLang <info@noirlang.tr>
 Homepage: https://amele.noirlang.tr
 Depends: libc6 (>= 2.35), libgtk-3-0, libwebkit2gtk-4.1-0, python3, curl, util-linux
 Description: Desktop forensic acquisition tool
@@ -142,7 +142,7 @@ pkgver = $VERSION-1
 pkgdesc = Desktop forensic acquisition tool
 url = https://amele.noirlang.tr
 builddate = $(date -u +%s)
-packager = favilances <favilances@proton.me>
+packager = noirLang <info@noirlang.tr>
 size = $installed_size
 arch = x86_64
 license = GPL-3.0-or-later
