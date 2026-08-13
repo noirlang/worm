@@ -1,5 +1,5 @@
 // Docker ve Konteyner Adli Bilişimi Arayüz Modülü
-import { showToast } from "./core/toast.js";
+import { showToast } from "../../core/toast.js";
 
 export const dockerState = {
   mode: "local", // "local" | "remote"
