@@ -1,3 +1,1 @@
-export function linuxPage({ t, icon, state, pageTitle, toolHub }) {
-  return toolHub("linux");
-}
+export * from "../tools/linux/index.js";
