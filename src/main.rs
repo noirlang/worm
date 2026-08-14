@@ -121,7 +121,9 @@ fn main() {
         Some("remote-tool-check") => remote_tool_check_command(args.collect()),
         Some("ram-status") => ram_status_command(),
         Some("wireguard-config") => wireguard_config_command(args.collect()),
-        Some("update-check") | Some("check-update") | Some("update") => update_check_command(args.collect()),
+        Some("update-check") | Some("check-update") | Some("update") => {
+            update_check_command(args.collect())
+        }
         Some("ui") => server::run_native(),
         Some("ui-browser") => server::run_browser(),
         Some("help") | Some("--help") | Some("-h") => {
@@ -2004,32 +2006,57 @@ fn update_check_command(args: Vec<String>) -> Result<(), String> {
     let response = api::update::update_check_endpoint();
     if response.status != 200 {
         let err_msg = String::from_utf8_lossy(&response.body);
-        return Err(format!(
-            "Güncelleme kontrolü başarısız oldu: {err_msg}"
-        ));
+        return Err(format!("Güncelleme kontrolü başarısız oldu: {err_msg}"));
     }
-    let data: serde_json::Value = serde_json::from_slice(&response.body)
-        .map_err(|e| format!("Yanıt çözümlenemedi: {e}"))?;
+    let data: serde_json::Value =
+        serde_json::from_slice(&response.body).map_err(|e| format!("Yanıt çözümlenemedi: {e}"))?;
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&data).unwrap());
         return Ok(());
     }
 
-    let current = data.get("current_version").and_then(|v| v.as_str()).unwrap_or("v0.0.0");
-    let latest_tag = data.get("tag_name").and_then(|v| v.as_str()).unwrap_or("bilinmiyor");
-    let release_name = data.get("name").and_then(|v| v.as_str()).unwrap_or(latest_tag);
+    let current = data
+        .get("current_version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("v0.0.0");
+    let latest_tag = data
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("bilinmiyor");
+    let release_name = data
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(latest_tag);
     let html_url = data.get("html_url").and_then(|v| v.as_str()).unwrap_or("");
 
     let target = data.get("update_target");
-    let pkg_label = target.and_then(|t| t.get("package_label")).and_then(|v| v.as_str()).unwrap_or("Bilinmeyen");
-    let detected_by = target.and_then(|t| t.get("detected_by")).and_then(|v| v.as_str()).unwrap_or("sistem");
-    let install_cmd = target.and_then(|t| t.get("install_command")).and_then(|v| v.as_str()).unwrap_or("");
+    let pkg_label = target
+        .and_then(|t| t.get("package_label"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Bilinmeyen");
+    let detected_by = target
+        .and_then(|t| t.get("detected_by"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("sistem");
+    let install_cmd = target
+        .and_then(|t| t.get("install_command"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     let asset = data.get("platform_asset");
-    let asset_name = asset.and_then(|a| a.get("name")).and_then(|v| v.as_str()).unwrap_or("bulunamadı");
-    let asset_url = asset.and_then(|a| a.get("download_url")).and_then(|v| v.as_str()).unwrap_or("");
-    let asset_size = asset.and_then(|a| a.get("size")).and_then(|v| v.as_u64()).unwrap_or(0);
+    let asset_name = asset
+        .and_then(|a| a.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("bulunamadı");
+    let asset_url = asset
+        .and_then(|a| a.get("download_url"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let asset_size = asset
+        .and_then(|a| a.get("size"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
 
     let clean_current = current.trim_start_matches('v');
     let clean_latest = latest_tag.trim_start_matches('v');
@@ -2037,14 +2064,24 @@ fn update_check_command(args: Vec<String>) -> Result<(), String> {
 
     println!("=== Amele Forensic Tool Güncelleme Kontrolü ===");
     println!("Mevcut Sürüm   : v{}", clean_current);
-    println!("Son Sürüm      : {}", if latest_tag.starts_with('v') { latest_tag.to_string() } else { format!("v{}", latest_tag) });
+    println!(
+        "Son Sürüm      : {}",
+        if latest_tag.starts_with('v') {
+            latest_tag.to_string()
+        } else {
+            format!("v{}", latest_tag)
+        }
+    );
     println!("Paket Türü     : {} (Algılama: {})", pkg_label, detected_by);
 
     if has_update {
         println!("\n[!] YENİ SÜRÜM MEVCUT! ({})", release_name);
         println!("İndirilecek Dosya : {}", asset_name);
         if asset_size > 0 {
-            println!("Dosya Boyutu      : {:.2} MB", asset_size as f64 / 1_048_576.0);
+            println!(
+                "Dosya Boyutu      : {:.2} MB",
+                asset_size as f64 / 1_048_576.0
+            );
         }
         if !asset_url.is_empty() {
             println!("İndirme Bağlantısı : {}", asset_url);
@@ -2061,4 +2098,3 @@ fn update_check_command(args: Vec<String>) -> Result<(), String> {
 
     Ok(())
 }
-

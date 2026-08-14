@@ -62,13 +62,7 @@ impl EvidenceVault {
         let hash_dir = case_dir.join("hash");
         let notes_dir = case_dir.join("notlar");
 
-        for dir in [
-            &case_dir,
-            &logs_dir,
-            &reports_dir,
-            &hash_dir,
-            &notes_dir,
-        ] {
+        for dir in [&case_dir, &logs_dir, &reports_dir, &hash_dir, &notes_dir] {
             runtime_log(
                 LogLevel::Debug,
                 "evidence",
