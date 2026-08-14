@@ -11,72 +11,59 @@ struct ExportRequest {
 }
 
 #[derive(Deserialize)]
-struct ImportRequest {
+struct PackagePathRequest {
     package_path: String,
 }
 
-#[derive(Deserialize)]
-struct VerifyRequest {
-    package_path: String,
+fn parse_body<'de, T: Deserialize<'de>>(body: &'de [u8]) -> Result<T, Response> {
+    serde_json::from_slice(body).map_err(|e| json_error(400, e.to_string()))
 }
 
 pub fn case_export_endpoint(body: &[u8]) -> Response {
-    let req: ExportRequest = match serde_json::from_slice(body) {
+    let req: ExportRequest = match parse_body(body) {
         Ok(r) => r,
-        Err(_) => return json_error(400, "JSON ayrıştırma hatası"),
+        Err(r) => return r,
     };
-
     let base_dir = crate::api::default_case_base_dir();
-
     let vault = match EvidenceVault::create(&base_dir, &req.case_name) {
         Ok(v) => v,
-        Err(e) => return json_error(500, &format!("Vaka açılamadı: {:?}", e)),
+        Err(e) => return json_error(500, e.to_string()),
     };
-
     match export_case(&vault, &PathBuf::from(req.output_path)) {
         Ok(path) => {
-            let hash_path = path.with_extension(format!(
-                "{}sha256",
-                path.extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| format!("{ext}."))
-                    .unwrap_or_default()
-            ));
-            json_ok(serde_json::json!({
-                "ok": true,
-                "package_path": path,
-                "hash_path": hash_path
-            }))
+            let hash_path = {
+                let mut p = path.as_os_str().to_owned();
+                p.push(".sha256");
+                PathBuf::from(p)
+            };
+            json_ok(serde_json::json!({ "ok": true, "package_path": path, "hash_path": hash_path }))
         }
-        Err(e) => json_error(500, &format!("Dışa aktarma hatası: {:?}", e)),
+        Err(e) => json_error(500, e.to_string()),
     }
 }
 
 pub fn case_import_endpoint(body: &[u8]) -> Response {
-    let req: ImportRequest = match serde_json::from_slice(body) {
+    let req: PackagePathRequest = match parse_body(body) {
         Ok(r) => r,
-        Err(_) => return json_error(400, "JSON ayrıştırma hatası"),
+        Err(r) => return r,
     };
-
     let base_dir = crate::api::default_case_base_dir();
-
     match import_case(&PathBuf::from(req.package_path), &base_dir) {
-        Ok(res) => json_ok(serde_json::to_value(res).unwrap()),
-        Err(e) => json_error(500, &format!("İçe aktarma hatası: {:?}", e)),
+        Ok(res) => match serde_json::to_value(res) {
+            Ok(v) => json_ok(v),
+            Err(e) => json_error(500, e.to_string()),
+        },
+        Err(e) => json_error(500, e.to_string()),
     }
 }
 
 pub fn case_verify_endpoint(body: &[u8]) -> Response {
-    let req: VerifyRequest = match serde_json::from_slice(body) {
+    let req: PackagePathRequest = match parse_body(body) {
         Ok(r) => r,
-        Err(_) => return json_error(400, "JSON ayrıştırma hatası"),
+        Err(r) => return r,
     };
-
     match verify_package(&PathBuf::from(req.package_path)) {
-        Ok(verified) => json_ok(serde_json::json!({
-            "ok": true,
-            "verified": verified
-        })),
-        Err(e) => json_error(500, &format!("Doğrulama hatası: {:?}", e)),
+        Ok(verified) => json_ok(serde_json::json!({ "ok": true, "verified": verified })),
+        Err(e) => json_error(500, e.to_string()),
     }
 }

@@ -15,30 +15,33 @@ struct PreflightRequest {
 pub fn preflight_storage_check_endpoint(body: &[u8]) -> Response {
     let req: PreflightRequest = match serde_json::from_slice(body) {
         Ok(r) => r,
-        Err(e) => return json_error(400, &e.to_string()),
+        Err(e) => return json_error(400, e.to_string()),
     };
 
-    let target_path = if let Some(tp) = req.target_path {
-        PathBuf::from(tp)
-    } else {
-        if let Ok(guard) = current_evidence_case().lock() {
-            if let Some(state) = guard.as_ref() {
-                state.base_dir.join(&state.case_name)
-            } else {
-                PathBuf::from(".")
-            }
-        } else {
-            PathBuf::from(".")
-        }
-    };
+    let target_path = req
+        .target_path
+        .map(PathBuf::from)
+        .or_else(|| {
+            current_evidence_case()
+                .lock()
+                .ok()?
+                .as_ref()
+                .map(|s| s.base_dir.join(&s.case_name))
+        })
+        .unwrap_or_else(|| PathBuf::from("."));
 
     let res = preflight_check(&req.source_path, &req.source_type, &target_path);
-    json_ok(serde_json::to_value(res).unwrap())
+    match serde_json::to_value(res) {
+        Ok(v) => json_ok(v),
+        Err(e) => json_error(500, e.to_string()),
+    }
 }
 
 pub fn active_mounts_endpoint() -> Response {
-    let mounts = list_active_mounts();
-    json_ok(serde_json::to_value(mounts).unwrap())
+    match serde_json::to_value(list_active_mounts()) {
+        Ok(v) => json_ok(v),
+        Err(e) => json_error(500, e.to_string()),
+    }
 }
 
 #[derive(Deserialize)]
@@ -47,20 +50,12 @@ struct CleanupRequest {
 }
 
 pub fn cleanup_mounts_endpoint(body: &[u8]) -> Response {
-    let mut case_name = None;
-    if !body.is_empty() {
-        if let Ok(req) = serde_json::from_slice::<CleanupRequest>(body) {
-            case_name = req.case_name;
-        }
-    }
-
-    let cleaned = if let Some(c) = case_name {
-        cleanup_case_mounts(&c)
-    } else {
-        cleanup_all_mounts()
+    let case_name = serde_json::from_slice::<CleanupRequest>(body)
+        .ok()
+        .and_then(|r| r.case_name);
+    let cleaned = match case_name.as_deref() {
+        Some(name) => cleanup_case_mounts(name),
+        None => cleanup_all_mounts(),
     };
-
-    json_ok(serde_json::json!({
-        "cleaned_mounts": cleaned
-    }))
+    json_ok(serde_json::json!({ "cleaned_mounts": cleaned }))
 }

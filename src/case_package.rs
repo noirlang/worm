@@ -1,8 +1,7 @@
-//! Vaka paketleme ve açma işlemlerini (.amelecase arşiv formatı) yönetir.
+//! Vaka klasörlerini `.amelecase` (tar.gz) formatında dışa ve içe aktarır.
 use crate::error::{AmeleError, AmeleResult, HataKodu};
 use crate::evidence::EvidenceVault;
 use crate::hash::{HashAlgorithm, calculate_file_hash, write_sha256_sidecar};
-use crate::logging::{LogLevel, runtime_log};
 use chrono::Local;
 use flate2::Compression;
 use flate2::read::GzDecoder;
@@ -12,6 +11,8 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use tar::{Archive, Builder};
+
+const HEADER_ENTRY: &str = "amele_case_header.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CasePackageHeader {
@@ -25,13 +26,6 @@ pub struct CasePackageHeader {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CasePackageManifestEntry {
-    pub relative_path: String,
-    pub size: u64,
-    pub sha256: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportResult {
     pub case_name: String,
     pub case_dir: PathBuf,
@@ -40,41 +34,36 @@ pub struct ImportResult {
     pub warnings: Vec<String>,
 }
 
+fn count_files_recursive(dir: &Path) -> (usize, u64) {
+    fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .fold((0, 0), |(count, size), entry| {
+            let Ok(meta) = entry.metadata() else {
+                return (count, size);
+            };
+            if meta.is_file() {
+                (count + 1, size + meta.len())
+            } else if meta.is_dir() {
+                let (c, s) = count_files_recursive(&entry.path());
+                (count + c, size + s)
+            } else {
+                (count, size)
+            }
+        })
+}
+
 pub fn export_case(vault: &EvidenceVault, output_path: &Path) -> AmeleResult<PathBuf> {
     vault.write_case_manifest()?;
 
-    let final_output_path = if output_path.is_dir() {
+    let dest = if output_path.is_dir() {
         output_path.join(format!("{}.amelecase", vault.case_name))
     } else {
         output_path.to_path_buf()
     };
 
-    let tar_gz = File::create(&final_output_path)
-        .map_err(|e| AmeleError::io(HataKodu::DosyaYazma, "Paket dosyası oluşturulamadı", e))?;
-    let enc = GzEncoder::new(tar_gz, Compression::default());
-    let mut builder = Builder::new(enc);
-
-    fn count_files(dir: &Path) -> (usize, u64) {
-        let mut count = 0;
-        let mut size = 0;
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                if let Ok(meta) = entry.metadata() {
-                    if meta.is_file() {
-                        count += 1;
-                        size += meta.len();
-                    } else if meta.is_dir() {
-                        let (c, s) = count_files(&entry.path());
-                        count += c;
-                        size += s;
-                    }
-                }
-            }
-        }
-        (count, size)
-    }
-
-    let (file_count, total_bytes) = count_files(&vault.case_dir);
+    let (file_count, total_bytes) = count_files_recursive(&vault.case_dir);
     let summary = vault.summary()?;
 
     let header = CasePackageHeader {
@@ -86,131 +75,71 @@ pub fn export_case(vault: &EvidenceVault, output_path: &Path) -> AmeleResult<Pat
         file_count,
         total_bytes,
     };
-
     let header_json = serde_json::to_string_pretty(&header)?;
-    let mut header_header = tar::Header::new_gnu();
-    header_header.set_size(header_json.len() as u64);
-    header_header.set_mode(0o644);
-    header_header.set_cksum();
-    builder
-        .append_data(
-            &mut header_header,
-            "amele_case_header.json",
-            header_json.as_bytes(),
-        )
-        .map_err(|e| AmeleError::io(HataKodu::DosyaYazma, "Header arşive eklenemedi", e))?;
 
+    let mut tar_header = tar::Header::new_gnu();
+    tar_header.set_size(header_json.len() as u64);
+    tar_header.set_mode(0o644);
+    tar_header.set_cksum();
+
+    let file = File::create(&dest)
+        .map_err(|e| AmeleError::io(HataKodu::DosyaYazma, "Paket dosyası oluşturulamadı", e))?;
+    let mut builder = Builder::new(GzEncoder::new(file, Compression::default()));
+    builder
+        .append_data(&mut tar_header, HEADER_ENTRY, header_json.as_bytes())
+        .map_err(|e| AmeleError::io(HataKodu::DosyaYazma, "Header arşive eklenemedi", e))?;
     builder
         .append_dir_all(&vault.case_name, &vault.case_dir)
         .map_err(|e| AmeleError::io(HataKodu::DosyaYazma, "Vaka dosyaları arşive eklenemedi", e))?;
-
-    let enc = builder
+    builder
         .into_inner()
-        .map_err(|e| AmeleError::io(HataKodu::DosyaYazma, "Tar arşivi kapatılamadı", e))?;
-    enc.finish()
+        .map_err(|e| AmeleError::io(HataKodu::DosyaYazma, "Tar arşivi kapatılamadı", e))?
+        .finish()
         .map_err(|e| AmeleError::io(HataKodu::DosyaYazma, "Gz arşivi kapatılamadı", e))?;
 
-    let hash = calculate_file_hash(&final_output_path, HashAlgorithm::Sha256)?;
-    write_sha256_sidecar(&final_output_path, &hash)?;
+    let hash = calculate_file_hash(&dest, HashAlgorithm::Sha256)?;
+    write_sha256_sidecar(&dest, &hash)?;
 
-    runtime_log(
-        LogLevel::Info,
-        "case_package",
-        format!("Vaka dışa aktarıldı: {}", final_output_path.display()),
-    );
-
-    Ok(final_output_path)
+    Ok(dest)
 }
 
 pub fn import_case(package_path: &Path, target_base_dir: &Path) -> AmeleResult<ImportResult> {
-    let tar_gz_header = File::open(package_path)
-        .map_err(|e| AmeleError::io(HataKodu::DosyaOkuma, "Paket dosyası açılamadı", e))?;
-    let tar_header = GzDecoder::new(tar_gz_header);
-    let mut archive_header = Archive::new(tar_header);
+    // Arşivi iki kez okumak gerekiyor: önce header, sonra extract.
+    // Streaming GzDecoder tek geçişe izin vermediği için iki ayrı File::open.
+    let header = read_package_header(package_path)?;
 
-    let mut header_data = None;
-    if let Ok(entries) = archive_header.entries() {
-        for file in entries.flatten() {
-            if let Ok(path) = file.path() {
-                if path.to_str().unwrap_or_default() == "amele_case_header.json" {
-                    let mut content = String::new();
-                    let mut f = file;
-                    if f.read_to_string(&mut content).is_ok() {
-                        header_data = serde_json::from_str::<CasePackageHeader>(&content).ok();
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    let header =
-        header_data.ok_or_else(|| AmeleError::new(HataKodu::Genel, "Header dosyası bulunamadı"))?;
-
+    let mut case_dir = target_base_dir.join(&header.case_name);
     let mut final_case_name = header.case_name.clone();
-    let mut case_dir = target_base_dir.join(&final_case_name);
     if case_dir.exists() {
-        final_case_name = format!("{}_imported", final_case_name);
+        final_case_name = format!("{}_imported", header.case_name);
         case_dir = target_base_dir.join(&final_case_name);
     }
 
-    let tar_gz = File::open(package_path)
-        .map_err(|e| AmeleError::io(HataKodu::DosyaOkuma, "Paket dosyası açılamadı", e))?;
-    let tar = GzDecoder::new(tar_gz);
-    let mut archive = Archive::new(tar);
-
     let mut files_extracted = 0;
-    if let Ok(entries) = archive.entries() {
-        for mut file in entries.flatten() {
-            let path = file.path().unwrap().into_owned();
-
-            if path.to_str().unwrap_or_default() == "amele_case_header.json" {
-                continue;
-            }
-
-            let rel_path = path
-                .strip_prefix(&header.case_name)
-                .unwrap_or(&path)
-                .to_path_buf();
-            let extract_path = case_dir.join(&rel_path);
-
-            if let Some(parent) = extract_path.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-
-            if file.unpack(&extract_path).is_ok() && extract_path.is_file() {
-                files_extracted += 1;
-            }
+    let mut archive = open_archive(package_path)?;
+    for mut entry in archive
+        .entries()
+        .map_err(|e| AmeleError::io(HataKodu::DosyaOkuma, "Arşiv okunamadı", e))?
+        .flatten()
+    {
+        let path = entry
+            .path()
+            .map_err(|e| AmeleError::io(HataKodu::DosyaOkuma, "Dosya yolu okunamadı", e))?
+            .into_owned();
+        if path.to_str() == Some(HEADER_ENTRY) {
+            continue;
+        }
+        let rel = path.strip_prefix(&header.case_name).unwrap_or(&path);
+        let dest = case_dir.join(rel);
+        if let Some(parent) = dest.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if entry.unpack(&dest).is_ok() && dest.is_file() {
+            files_extracted += 1;
         }
     }
 
-    let mut integrity_verified = false;
-    let mut warnings = vec![];
-    let manifest_path = case_dir.join("case_manifest.json");
-    if manifest_path.exists() {
-        if let Ok(content) = fs::read_to_string(&manifest_path) {
-            if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
-                integrity_verified = true;
-                if let Some(files) = manifest["files"].as_array() {
-                    for file in files {
-                        if let (Some(rel), Some(hash)) =
-                            (file["relative_path"].as_str(), file["sha256"].as_str())
-                        {
-                            let p = case_dir.join(rel);
-                            if p.exists() {
-                                if let Ok(calc) = calculate_file_hash(&p, HashAlgorithm::Sha256) {
-                                    if !calc.eq_ignore_ascii_case(hash) {
-                                        integrity_verified = false;
-                                        warnings.push(format!("Hash uyuşmazlığı: {}", rel));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let (integrity_verified, warnings) = verify_extracted_files(&case_dir);
 
     Ok(ImportResult {
         case_name: final_case_name,
@@ -222,26 +151,83 @@ pub fn import_case(package_path: &Path, target_base_dir: &Path) -> AmeleResult<I
 }
 
 pub fn verify_package(package_path: &Path) -> AmeleResult<bool> {
-    let sidecar = package_path.with_extension(format!(
-        "{}sha256",
-        package_path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| format!("{ext}."))
-            .unwrap_or_default()
-    ));
-
+    // Sidecar dosyası `foo.amelecase` -> `foo.amelecase.sha256`
+    let sidecar = {
+        let mut p = package_path.as_os_str().to_owned();
+        p.push(".sha256");
+        PathBuf::from(p)
+    };
     if !sidecar.exists() {
         return Ok(false);
     }
-
-    let content = fs::read_to_string(sidecar)
+    let content = fs::read_to_string(&sidecar)
         .map_err(|e| AmeleError::io(HataKodu::DosyaOkuma, "Hash dosyası okunamadı", e))?;
+    let expected = content.split_whitespace().next().unwrap_or_default();
+    let actual = calculate_file_hash(package_path, HashAlgorithm::Sha256)?;
+    Ok(expected.eq_ignore_ascii_case(&actual))
+}
 
-    let expected_hash = content.split_whitespace().next().unwrap_or_default();
-    let calc = calculate_file_hash(package_path, HashAlgorithm::Sha256)?;
+// ── private helpers ──────────────────────────────────────────────────────────
 
-    Ok(expected_hash.eq_ignore_ascii_case(&calc))
+fn open_archive(path: &Path) -> AmeleResult<Archive<GzDecoder<File>>> {
+    let file = File::open(path)
+        .map_err(|e| AmeleError::io(HataKodu::DosyaOkuma, "Paket dosyası açılamadı", e))?;
+    Ok(Archive::new(GzDecoder::new(file)))
+}
+
+fn read_package_header(package_path: &Path) -> AmeleResult<CasePackageHeader> {
+    let mut archive = open_archive(package_path)?;
+    archive
+        .entries()
+        .map_err(|e| AmeleError::io(HataKodu::DosyaOkuma, "Arşiv okunamadı", e))?
+        .flatten()
+        .find(|e| {
+            e.path()
+                .map(|p| p.to_str() == Some(HEADER_ENTRY))
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| AmeleError::new(HataKodu::Genel, "Header dosyası bulunamadı"))
+        .and_then(|mut e| {
+            let mut buf = String::new();
+            e.read_to_string(&mut buf)
+                .map_err(|err| AmeleError::io(HataKodu::DosyaOkuma, "Header okunamadı", err))?;
+            serde_json::from_str(&buf)
+                .map_err(|err| AmeleError::new(HataKodu::Genel, &err.to_string()))
+        })
+}
+
+fn verify_extracted_files(case_dir: &Path) -> (bool, Vec<String>) {
+    let manifest_path = case_dir.join("case_manifest.json");
+    let Ok(content) = fs::read_to_string(&manifest_path) else {
+        return (false, vec![]);
+    };
+    let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return (false, vec![]);
+    };
+    let Some(files) = manifest["files"].as_array() else {
+        return (false, vec![]);
+    };
+
+    let mut verified = true;
+    let mut warnings = vec![];
+    for file in files {
+        let (Some(rel), Some(expected_hash)) =
+            (file["relative_path"].as_str(), file["sha256"].as_str())
+        else {
+            continue;
+        };
+        let p = case_dir.join(rel);
+        if !p.exists() {
+            continue;
+        }
+        if let Ok(actual) = calculate_file_hash(&p, HashAlgorithm::Sha256) {
+            if !actual.eq_ignore_ascii_case(expected_hash) {
+                verified = false;
+                warnings.push(format!("Hash uyuşmazlığı: {rel}"));
+            }
+        }
+    }
+    (verified, warnings)
 }
 
 #[cfg(test)]
@@ -250,27 +236,38 @@ mod tests {
 
     #[test]
     fn test_export_and_import_case() {
-        let src_dir = tempfile::tempdir().unwrap();
-        let target_dir = tempfile::tempdir().unwrap();
-
-        let vault = EvidenceVault::create(src_dir.path(), "testcase").unwrap();
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        let vault = EvidenceVault::create(src.path(), "testcase").unwrap();
         vault.add_note("test note").unwrap();
         fs::write(vault.new_file("ciktilar", "test.txt"), "hello").unwrap();
 
-        let package = export_case(&vault, src_dir.path()).unwrap();
-        assert!(package.exists());
+        let pkg = export_case(&vault, src.path()).unwrap();
+        assert!(pkg.exists());
 
-        let import_res = import_case(&package, target_dir.path()).unwrap();
-        assert!(import_res.files_extracted >= 3);
-        assert!(import_res.integrity_verified);
+        let res = import_case(&pkg, dst.path()).unwrap();
+        assert!(res.files_extracted >= 3);
+        assert!(res.integrity_verified);
+        assert!(res.warnings.is_empty());
     }
 
     #[test]
     fn test_verify_package_integrity() {
-        let src_dir = tempfile::tempdir().unwrap();
-        let vault = EvidenceVault::create(src_dir.path(), "testcase2").unwrap();
-        let package = export_case(&vault, src_dir.path()).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let vault = EvidenceVault::create(dir.path(), "testcase2").unwrap();
+        let pkg = export_case(&vault, dir.path()).unwrap();
+        assert!(verify_package(&pkg).unwrap());
+    }
 
-        assert!(verify_package(&package).unwrap());
+    #[test]
+    fn test_tampered_package_fails_verify() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = EvidenceVault::create(dir.path(), "testcase3").unwrap();
+        let pkg = export_case(&vault, dir.path()).unwrap();
+
+        // Sidecar'ı olduğu gibi bırak, pakete veri ekle → hash uyuşmamalı
+        let mut f = std::fs::OpenOptions::new().append(true).open(&pkg).unwrap();
+        std::io::Write::write_all(&mut f, b"tampered").unwrap();
+        assert!(!verify_package(&pkg).unwrap());
     }
 }
