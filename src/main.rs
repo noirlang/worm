@@ -1777,63 +1777,56 @@ fn cli_timestamp() -> String {
 /// CLI argümanlarından raw/aff4 format seçimini ayıklar.
 fn extract_output_format(args: &mut Vec<String>) -> Result<AcquisitionOutputFormat, String> {
     let mut selected = None;
-    let mut index = 0;
-    while index < args.len() {
-        let value = args[index].clone();
-        let parsed = if let Some(format) = value.strip_prefix("--format=") {
-            Some(format.to_string())
-        } else if value == "--aff4" {
-            Some("aff4".to_string())
-        } else if value == "--raw" {
-            Some("raw".to_string())
-        } else if matches!(value.as_str(), "raw" | "dd" | "img" | "aff4") {
-            Some(value)
+    args.retain(|arg| {
+        let parsed = if let Some(format) = arg.strip_prefix("--format=") {
+            Some(format)
+        } else if arg == "--aff4" {
+            Some("aff4")
+        } else if arg == "--raw" {
+            Some("raw")
+        } else if matches!(arg.as_str(), "raw" | "dd" | "img" | "aff4") {
+            Some(arg.as_str())
         } else {
             None
         };
 
-        if let Some(format) = parsed {
-            args.remove(index);
-            selected = Some(format);
+        if let Some(fmt) = parsed {
+            selected = Some(fmt.to_string());
+            false
         } else {
-            index += 1;
+            true
         }
-    }
+    });
     AcquisitionOutputFormat::parse(selected.as_deref())
 }
 
 /// Global --profile argümanını komut listesinden ayırır.
 fn extract_global_profile(args: &mut Vec<String>) -> Option<String> {
-    let mut index = 0;
-    while index < args.len() {
-        if args[index] == "--profile" {
-            args.remove(index);
-            if index < args.len() {
-                return Some(args.remove(index));
-            }
-            return None;
+    if let Some(pos) = args
+        .iter()
+        .position(|a| a == "--profile" || a.starts_with("--profile="))
+    {
+        let arg = args.remove(pos);
+        if let Some(val) = arg.strip_prefix("--profile=") {
+            Some(val.to_string())
+        } else if pos < args.len() {
+            Some(args.remove(pos))
+        } else {
+            None
         }
-        if let Some(username) = args[index].strip_prefix("--profile=") {
-            let username = username.to_string();
-            args.remove(index);
-            return Some(username);
-        }
-        index += 1;
+    } else {
+        None
     }
-    None
 }
 
 /// Global --en bayrağını komut listesinden ayıklar.
 fn extract_global_en_flag(args: &mut Vec<String>) -> bool {
-    let mut index = 0;
-    while index < args.len() {
-        if args[index] == "--en" {
-            args.remove(index);
-            return true;
-        }
-        index += 1;
+    if let Some(pos) = args.iter().position(|a| a == "--en") {
+        args.remove(pos);
+        true
+    } else {
+        false
     }
-    false
 }
 
 /// Profil komutlarında otomatik açılış bayrağını ayıklar.
