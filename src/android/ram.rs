@@ -230,7 +230,9 @@ echo "[AMELE] DONE"
                     "-s",
                     serial,
                     "push",
-                    script_path.to_str().unwrap(),
+                    script_path
+                        .to_str()
+                        .ok_or_else(|| "Geçersiz betik dosya yolu".to_string())?,
                     "/data/local/tmp/memdump.sh",
                 ])
                 .output()
@@ -306,7 +308,9 @@ echo "[AMELE] DONE"
                     serial,
                     "pull",
                     "/data/local/tmp/amele_ram_dumps.tar",
-                    output_path.to_str().unwrap(),
+                    output_path
+                        .to_str()
+                        .ok_or_else(|| "Geçersiz çıktı dosya yolu".to_string())?,
                 ])
                 .output()
                 .map_err(|err| format!("Bellek paketini çekme başarısız: {err}"))?;

@@ -363,16 +363,13 @@ fn collect_turkey_app_storage(serial: &str, dir: &std::path::Path) -> Acquisitio
     let mut not_installed_high_priority_targets = Vec::new();
 
     for target in ANDROID_APP_TARGETS {
-        let installed_package = packages.iter().find(|pkg| pkg.package == target.package);
-        if installed_package.is_none() {
+        let Some(package) = packages.iter().find(|pkg| pkg.package == target.package) else {
             if target.priority == "turkey_high" {
                 not_installed_high_priority_targets
                     .push(format!("{} ({})", target.platform, target.package));
             }
             continue;
-        }
-
-        let package = installed_package.expect("checked above");
+        };
         let public_paths = target_public_storage_paths(target)
             .into_iter()
             .map(|path| probe_public_storage_path(serial, &path))
