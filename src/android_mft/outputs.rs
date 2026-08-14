@@ -4,10 +4,8 @@ use super::parsers::{
     build_logical_records, parse_getprop_line, parse_i64_prefix, read_text_file, trim_for_record,
 };
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Read;
+use std::fs;
 use std::path::Path;
 
 /// Mantıksal Android kayıtlarından evidence.json, rapor, timeline ve korelasyon dosyalarını üretir.
@@ -59,21 +57,9 @@ pub fn write_logical_analysis_outputs(
     Ok(outputs)
 }
 
-/// Verilen dosya için SHA-256 hash hesaplar.
 pub(super) fn sha256_file(path: &Path) -> Result<String, String> {
-    let mut file = File::open(path).map_err(|err| format!("Hash icin dosya acilamadi: {err}"))?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(|err| format!("Hash icin dosya okunamadi: {err}"))?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(crate::hash::to_hex(&hasher.finalize()))
+    crate::hash::calculate_file_hash(path, crate::hash::HashAlgorithm::Sha256)
+        .map_err(|e| e.to_string())
 }
 
 /// JSON değeri pretty formatla dosyaya yazar ve sidecar hash üretir.

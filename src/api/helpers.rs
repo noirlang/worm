@@ -1,7 +1,6 @@
 //! Yetki yükseltme, dosya indirme, JSON yardımcıları ve ortak API araçlarını içerir.
 use chrono::Local;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -633,19 +632,9 @@ pub fn download_file_to_path(url: &str, target: &Path, fallback: &str) -> Result
     }
 }
 
-/// Dosya için SHA-256 hash hesaplar.
 pub fn sha256_file(path: &Path) -> Result<String, String> {
-    let mut file = fs::File::open(path).map_err(|err| err.to_string())?;
-    let mut hasher = Sha256::new();
-    let mut buffer = vec![0_u8; crate::hash::HASH_BUFFER_SIZE];
-    loop {
-        let read = file.read(&mut buffer).map_err(|err| err.to_string())?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(crate::hash::to_hex(&hasher.finalize()))
+    crate::hash::calculate_file_hash(path, crate::hash::HashAlgorithm::Sha256)
+        .map_err(|e| e.to_string())
 }
 
 /// Geçici helper dosyaları için çakışmayan zaman damgalı ad kökü üretir.
