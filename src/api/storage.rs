@@ -18,10 +18,15 @@ pub fn preflight_storage_check_endpoint(body: &[u8]) -> Response {
         Err(e) => return json_error(400, e.to_string()),
     };
 
-    let target_path = req.target_path
+    let target_path = req
+        .target_path
         .map(PathBuf::from)
         .or_else(|| {
-            current_evidence_case().lock().ok()?.as_ref().map(|s| s.base_dir.join(&s.case_name))
+            current_evidence_case()
+                .lock()
+                .ok()?
+                .as_ref()
+                .map(|s| s.base_dir.join(&s.case_name))
         })
         .unwrap_or_else(|| PathBuf::from("."));
 
@@ -39,7 +44,9 @@ struct CleanupRequest {
 }
 
 pub fn cleanup_mounts_endpoint(body: &[u8]) -> Response {
-    let case_name = serde_json::from_slice::<CleanupRequest>(body).ok().and_then(|r| r.case_name);
+    let case_name = serde_json::from_slice::<CleanupRequest>(body)
+        .ok()
+        .and_then(|r| r.case_name);
     let cleaned = match case_name.as_deref() {
         Some(name) => cleanup_case_mounts(name),
         None => cleanup_all_mounts(),

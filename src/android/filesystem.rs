@@ -104,21 +104,20 @@ where
         }
     }
 
-    let (output_file_name, use_block_copy) = if block_device.is_some() {
-        (format!("userdata.img"), true)
+    let output_file_name = if block_device.is_some() {
+        "userdata.img"
     } else {
-        (format!("filesystem.tar"), false)
+        "filesystem.tar"
     };
 
-    let output_path = output_dir.join(&output_file_name);
+    let output_path = output_dir.join(output_file_name);
     let mut file = std::fs::File::create(&output_path)
         .map_err(|err| format!("Hedef dosya olusturulamadi: {err}"))?;
 
     let mut cmd = Command::new("adb");
     cmd.args(["-s", serial]);
 
-    if use_block_copy {
-        let dev = block_device.clone().unwrap();
+    if let Some(ref dev) = block_device {
         let status_msg = format!("Bölüm aygıtı bulundu: {dev}. Disk imajı (dd) aktarılıyor...");
         progress(1, 3, &status_msg);
 
@@ -181,7 +180,7 @@ where
         if total_bytes - last_progress_bytes > 10 * 1024 * 1024 {
             last_progress_bytes = total_bytes;
             let mb = total_bytes / (1024 * 1024);
-            let mode_str = if use_block_copy {
+            let mode_str = if block_device.is_some() {
                 "Disk İmajı"
             } else {
                 "Dosya Arşivi"
