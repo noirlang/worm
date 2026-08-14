@@ -1,6 +1,7 @@
 //! HTTP API modüllerini ve ortak API yardımcılarını dışarı açar.
 pub mod acquisition_control;
 pub mod android;
+pub mod case_transfer;
 pub mod desktop;
 pub mod developer;
 pub mod docker;
@@ -16,6 +17,7 @@ mod ram_tools;
 mod router;
 pub mod settings;
 mod state;
+pub mod storage;
 pub mod system;
 pub mod update;
 pub mod wireguard;

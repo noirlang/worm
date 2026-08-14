@@ -124,6 +124,12 @@ fn main() {
         Some("update-check") | Some("check-update") | Some("update") => {
             update_check_command(args.collect())
         }
+        Some("case-export") => case_export_command(args.collect()),
+        Some("case-import") => case_import_command(args.collect()),
+        Some("case-verify") => case_verify_command(args.collect()),
+        Some("preflight") => preflight_command(args.collect()),
+        Some("mounts") | Some("mount-list") => mount_list_command(),
+        Some("mount-cleanup") => mount_cleanup_command(args.collect()),
         Some("ui") => server::run_native(),
         Some("ui-browser") => server::run_browser(),
         Some("help") | Some("--help") | Some("-h") => {
@@ -313,8 +319,14 @@ fn print_help() {
                winpmem-install-helper <src> <res> Authorized WinPMEM installation helper command\n\
                mount-helper <req> <res>       Authorized image mount helper command\n\
                disk-size <device|file>       Get disk or file size\n\
+               case-export <case> [file]     Export case to .amelecase\n\
+               case-import <file>            Import .amelecase package\n\
+               case-verify <file>            Verify .amelecase integrity\n\
                remote-tool-check <ip> <port> <winpmem|avml> [token]\n\
-               ram-status                    Print local AVML/WinPMEM status\n\n\
+               ram-status                    Print local AVML/WinPMEM status\n\
+               preflight <src> <type> [tgt]  Disk preflight check\n\
+               mounts                        List active mounts\n\
+               mount-cleanup [case]          Cleanup mounts\n\n\
              Note: Android/iOS CLI commands require a connected online profile.\n\
              Note: the main binary command is amele-forensic-tool; amele alias is also available for backward compatibility."
         );
@@ -376,8 +388,14 @@ fn print_help() {
                winpmem-install-helper <kaynak> <res> Yetkili WinPMEM kurulum yardimci komutu\n\
                mount-helper <req> <res>       Yetkili imaj mount yardimci komutu\n\
                disk-size <cihaz|dosya>       Disk veya dosya boyutu al\n\
+               case-export <vaka> [dosya]    Vakayı .amelecase dosyasına aktar\n\
+               case-import <dosya>           .amelecase paketini içeri aktar\n\
+               case-verify <dosya>           .amelecase bütünlüğünü doğrula\n\
                remote-tool-check <ip> <port> <winpmem|avml> [token]\n\
-               ram-status                    Yerel AVML/WinPMEM durumunu yazdir\n\n\
+               ram-status                    Yerel AVML/WinPMEM durumunu yazdir\n\
+               preflight <src> <tip> [hedef] Disk preflight kontrolü\n\
+               mounts                        Aktif mount'ları listele\n\
+               mount-cleanup [vaka]          Mount temizliği yap\n\n\
              Not: Android/iOS CLI komutlari bagli online profil gerektirir.\n\
              Not: paketlerde ana komut amele-forensic-tool'dur; geriye uyumluluk icin amele alias'i da bulunabilir."
         );
@@ -2096,5 +2114,168 @@ fn update_check_command(args: Vec<String>) -> Result<(), String> {
         println!("\n[✓] Sisteminiz güncel. En son sürümü kullanıyorsunuz.");
     }
 
+    Ok(())
+}
+
+fn preflight_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanım: amele preflight <kaynak_yol> <kaynak_tipi> [hedef_yol]\nKaynak tipleri: disk, ram, android, ios".to_string());
+    }
+    let source_path = &args[0];
+    let source_type = args.get(1).map(|s| s.as_str()).unwrap_or("disk");
+    let target_path = args
+        .get(2)
+        .map(|s| std::path::PathBuf::from(s))
+        .unwrap_or_else(|| amele::api::default_case_base_dir());
+
+    let result = amele::storage_guard::preflight_check(source_path, source_type, &target_path);
+    println!("=== Disk Alanı Ön Kontrolü ===");
+    println!("Kaynak       : {}", source_path);
+    println!("Kaynak Tipi  : {}", source_type);
+    println!(
+        "Kaynak Boyutu: {:.2} GB",
+        result.source_bytes as f64 / 1_073_741_824.0
+    );
+    println!(
+        "Boş Alan     : {:.2} GB",
+        result.available_bytes as f64 / 1_073_741_824.0
+    );
+    if result.is_sufficient {
+        println!("\n✓ Yeterli disk alanı mevcut.");
+    } else {
+        println!("\n✗ YETERSİZ ALAN!");
+        println!(
+            "Eksik        : {:.2} GB",
+            result.shortage_bytes as f64 / 1_073_741_824.0
+        );
+        if let Some(msg) = &result.warning_message {
+            println!("Uyarı        : {}", msg);
+        }
+    }
+    Ok(())
+}
+
+fn mount_list_command() -> Result<(), String> {
+    let mounts = amele::mount_tracker::list_active_mounts();
+    if mounts.is_empty() {
+        println!("Aktif bağlı imaj bulunmuyor.");
+        return Ok(());
+    }
+    println!("=== Aktif Bağlı İmajlar ===");
+    for m in &mounts {
+        println!("  ID          : {}", m.mount_id);
+        println!("  Vaka        : {}", m.case_name);
+        println!("  İmaj        : {}", m.image_path.display());
+        println!("  Bağlama     : {}", m.mount_point.display());
+        println!("  Tarih       : {}", m.mounted_at);
+        println!("  ---");
+    }
+    println!("Toplam: {} adet", mounts.len());
+    Ok(())
+}
+
+fn mount_cleanup_command(args: Vec<String>) -> Result<(), String> {
+    let case_filter = args.first().map(|s| s.as_str());
+    let cleaned = if let Some(case) = case_filter {
+        println!("Vaka '{}' için mount temizliği yapılıyor...", case);
+        amele::mount_tracker::cleanup_case_mounts(case)
+    } else {
+        println!("Tüm aktif mount'lar temizleniyor...");
+        amele::mount_tracker::cleanup_all_mounts()
+    };
+    if cleaned.is_empty() {
+        println!("Temizlenecek mount bulunamadı.");
+    } else {
+        for id in &cleaned {
+            println!("  ✓ Temizlendi: {}", id);
+        }
+        println!("Toplam {} mount temizlendi.", cleaned.len());
+    }
+    Ok(())
+}
+
+fn case_export_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanım: amele case-export <vaka_adi> [hedef_dosya]".to_string());
+    }
+    let case_name = &args[0];
+    let base_dir = amele::api::default_case_base_dir();
+    let vault =
+        amele::evidence::EvidenceVault::create(&base_dir, case_name).map_err(|e| e.to_string())?;
+
+    let output_path = if let Some(p) = args.get(1) {
+        std::path::PathBuf::from(p)
+    } else {
+        base_dir.clone()
+    };
+
+    println!("Vaka dışa aktarılıyor: {}", case_name);
+    let package_path =
+        amele::case_package::export_case(&vault, &output_path).map_err(|e| e.to_string())?;
+    println!("✓ Paket oluşturuldu: {}", package_path.display());
+
+    let hash_path = package_path.with_extension(format!(
+        "{}sha256",
+        package_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| format!("{ext}."))
+            .unwrap_or_default()
+    ));
+    if hash_path.is_file() {
+        println!("✓ Hash dosyası : {}", hash_path.display());
+    }
+    Ok(())
+}
+
+fn case_import_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanım: amele case-import <amelecase_dosyasi>".to_string());
+    }
+    let package_path = std::path::Path::new(&args[0]);
+    if !package_path.is_file() {
+        return Err(format!("Dosya bulunamadı: {}", package_path.display()));
+    }
+
+    let base_dir = amele::api::default_case_base_dir();
+    println!("Vaka içe aktarılıyor: {}", package_path.display());
+
+    let result =
+        amele::case_package::import_case(package_path, &base_dir).map_err(|e| e.to_string())?;
+
+    println!("✓ Vaka aktarıldı    : {}", result.case_name);
+    println!("  Hedef klasör      : {}", result.case_dir.display());
+    println!("  Dosya sayısı      : {}", result.files_extracted);
+    println!(
+        "  Bütünlük doğrulandı: {}",
+        if result.integrity_verified {
+            "Evet ✓"
+        } else {
+            "Hayır ✗"
+        }
+    );
+    for warn in &result.warnings {
+        println!("  ⚠ {}", warn);
+    }
+    Ok(())
+}
+
+fn case_verify_command(args: Vec<String>) -> Result<(), String> {
+    if args.is_empty() {
+        return Err("Kullanım: amele case-verify <amelecase_dosyasi>".to_string());
+    }
+    let package_path = std::path::Path::new(&args[0]);
+    if !package_path.is_file() {
+        return Err(format!("Dosya bulunamadı: {}", package_path.display()));
+    }
+
+    println!("Paket bütünlüğü doğrulanıyor: {}", package_path.display());
+    let verified = amele::case_package::verify_package(package_path).map_err(|e| e.to_string())?;
+
+    if verified {
+        println!("✓ Paket bütünlüğü doğrulandı. SHA-256 hash eşleşiyor.");
+    } else {
+        println!("✗ UYARI: Paket bütünlüğü doğrulanamadı! SHA-256 hash eşleşmiyor.");
+    }
     Ok(())
 }

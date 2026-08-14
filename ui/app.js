@@ -17,6 +17,7 @@ import { homePage, metric } from "./pages/home.js";
 import { otherPage, detailPanel, settingsPage, aboutPage, hashPanel } from "./pages/other.js";
 import { workflowPage, pickerField, field, pageTitle, casePanel } from "./pages/workflow.js";
 import { initDeveloperMode, devLog } from "./developer.js";
+import { initJobWidget } from "./core/jobs.js";
 
 const APP_VERSION = "v0.0.16";
 const assetPath = "./assets";
@@ -3802,6 +3803,7 @@ async function bootApp() {
 
   // Developer mode — 5 kez logoya tıklayınca aktifleşir
   initDeveloperMode({ apiRequest, backendReady });
+  if (backendAvailable) initJobWidget();
   devLog("INFO", "ui:startup", `Amele ${APP_VERSION} başlatıldı — platform: ${state.platform}, dil: ${state.language}, tema: ${state.theme}, backend: ${backendAvailable}`, apiRequest, backendReady);
 }
 

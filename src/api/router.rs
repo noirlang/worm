@@ -3,7 +3,7 @@ use crate::server::{Response, json_error, json_ok};
 
 use super::{
     acquisition_control, android, desktop, developer, docker, evidence, hash_api, ios, profile,
-    ram, settings, system, update, wireguard,
+    ram, settings, storage, system, update, wireguard,
 };
 
 /// API HTTP metod/path çiftini ilgili endpoint fonksiyonuna yönlendirir ve detaylıca loglar.
@@ -584,6 +584,9 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
         ("POST", "/api/open-url") => desktop::open_url_endpoint(body),
         ("POST", "/api/pick-file") => desktop::pick_path_endpoint(false),
         ("POST", "/api/pick-folder") => desktop::pick_path_endpoint(true),
+        ("POST", "/api/preflight-storage-check") => storage::preflight_storage_check_endpoint(body),
+        ("GET", "/api/mounts-active") => storage::active_mounts_endpoint(),
+        ("POST", "/api/mounts-cleanup") => storage::cleanup_mounts_endpoint(body),
         _ => {
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Warn,
