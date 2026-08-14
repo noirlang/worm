@@ -1,4 +1,4 @@
-import { formatBytes } from "./utils.js";
+import { formatBytes, escapeHtml } from "./utils.js";
 
 function injectModalStyles() {
   if (document.getElementById("storage-check-styles")) return;
@@ -167,7 +167,7 @@ function showModal(data) {
           <h2 class="sc-header-title">Yetersiz Disk Alanı Uyarısı</h2>
         </div>
         <div class="sc-content">
-          <div class="sc-warning-msg">${warningMsg}</div>
+          <div class="sc-warning-msg">${escapeHtml(warningMsg)}</div>
           
           <div class="sc-stats">
             <div class="sc-stat-row">

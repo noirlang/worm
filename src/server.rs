@@ -32,13 +32,21 @@ impl Response {
     }
 }
 
+/// Direct streaming JSON response without intermediate Value AST allocation.
+pub fn json_serialize<T: serde::Serialize>(value: &T) -> Response {
+    match serde_json::to_vec(value) {
+        Ok(body) => Response {
+            status: 200,
+            content_type: "application/json; charset=utf-8".to_string(),
+            body,
+        },
+        Err(err) => json_error(500, err.to_string()),
+    }
+}
+
 /// Başarılı JSON API cevabı üretir.
 pub fn json_ok(value: serde_json::Value) -> Response {
-    Response {
-        status: 200,
-        content_type: "application/json; charset=utf-8".to_string(),
-        body: serde_json::to_vec(&value).unwrap_or_else(|_| b"{}".to_vec()),
-    }
+    json_serialize(&value)
 }
 
 /// Hata mesajını sınıflandırıp ayrıntılı JSON hata cevabına dönüştürür.

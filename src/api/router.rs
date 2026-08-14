@@ -8,26 +8,28 @@ use super::{
 
 /// API HTTP metod/path çiftini ilgili endpoint fonksiyonuna yönlendirir ve detaylıca loglar.
 pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
-    let body_str = if body.is_empty() {
-        "(boş)".to_string()
-    } else if body.len() > 250 {
-        format!(
-            "{}... (toplam {} byte)",
-            String::from_utf8_lossy(&body[..250]).trim(),
-            body.len()
-        )
-    } else {
-        String::from_utf8_lossy(body).trim().to_string()
-    };
+    if path != "/api/acquisition-status" && path != "/api/developer-logs" {
+        let body_str = if body.is_empty() {
+            "(boş)".to_string()
+        } else if body.len() > 250 {
+            format!(
+                "{}... (toplam {} byte)",
+                String::from_utf8_lossy(&body[..250]).trim(),
+                body.len()
+            )
+        } else {
+            String::from_utf8_lossy(body).trim().to_string()
+        };
 
-    crate::logging::runtime_log(
-        crate::logging::LogLevel::Debug,
-        "api:router",
-        format!(
-            "API ISTEK BASLADI | {} {} | Parametreler: {}",
-            method, path, body_str
-        ),
-    );
+        crate::logging::runtime_log(
+            crate::logging::LogLevel::Debug,
+            "api:router",
+            format!(
+                "API ISTEK BASLADI | {} {} | Parametreler: {}",
+                method, path, body_str
+            ),
+        );
+    }
 
     let response = match (method, path) {
         ("GET", "/api/health") => json_ok(serde_json::json!({

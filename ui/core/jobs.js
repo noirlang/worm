@@ -1,4 +1,5 @@
-// ui/core/jobs.js
+import { escapeHtml } from "./utils.js";
+
 let widgetElement = null;
 let minimizedElement = null;
 let containerElement = null;
@@ -300,13 +301,13 @@ function render() {
       el.innerHTML = `
         <div class="job-info">
           <span class="job-icon">${icon}</span>
-          <span class="job-desc">${id}</span>
+          <span class="job-desc">${escapeHtml(id)}</span>
         </div>
         <div class="job-progress-bg">
           <div class="job-progress-fill" style="width: ${pct}%"></div>
         </div>
         <div class="job-status">
-          <span class="job-msg">${msg}</span>
+          <span class="job-msg">${escapeHtml(msg)}</span>
           <span class="job-pct">${pct}%</span>
         </div>
       `;
