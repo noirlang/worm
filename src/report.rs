@@ -535,7 +535,7 @@ mod tests {
     fn json_report_includes_android_outputs() {
         let dir = tempfile::tempdir().unwrap();
         let vault = EvidenceVault::create(dir.path(), "case1").unwrap();
-        std::fs::write(vault.android_dir.join("device_profile.json"), "{}").unwrap();
+        std::fs::write(vault.new_file("android", "device_profile.json"), "{}").unwrap();
         let target = vault.reports_dir.join("report.json");
         let info = ReportInfo {
             title: "T".to_string(),

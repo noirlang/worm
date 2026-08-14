@@ -65,11 +65,6 @@ impl EvidenceVault {
         for dir in [
             &case_dir,
             &logs_dir,
-            &outputs_dir,
-            &ram_dir,
-            &android_dir,
-            &ios_dir,
-            &docker_dir,
             &reports_dir,
             &hash_dir,
             &notes_dir,
@@ -77,7 +72,7 @@ impl EvidenceVault {
             runtime_log(
                 LogLevel::Debug,
                 "evidence",
-                format!("Vaka alt dizini olusturuluyor: {}", dir.display()),
+                format!("Vaka temel alt dizini olusturuluyor: {}", dir.display()),
             );
             fs::create_dir_all(dir).map_err(|err| {
                 let w_err = AmeleError::io(
@@ -125,10 +120,26 @@ impl EvidenceVault {
         Ok(vault)
     }
 
-    /// Belirli kasa alt klasöründe yeni çıktı dosyası yolu üretir.
+    /// Belirli kasa alt klasöründe yeni çıktı dosyası yolu üretir ve klasörü talep anında oluşturur.
     pub fn new_file(&self, subdir: &str, file_name: &str) -> PathBuf {
         let _guard = self.lock.lock().ok();
-        self.resolve_subdir(subdir).join(file_name)
+        let target_dir = self.resolve_subdir(subdir);
+        let _ = fs::create_dir_all(target_dir);
+        target_dir.join(file_name)
+    }
+
+    /// Kasa alt klasörünün varlığını garanti eder; yoksa talep anında oluşturur.
+    pub fn ensure_subdir(&self, subdir: &str) -> AmeleResult<PathBuf> {
+        let _guard = self.lock.lock().ok();
+        let target_dir = self.resolve_subdir(subdir).to_path_buf();
+        fs::create_dir_all(&target_dir).map_err(|err| {
+            AmeleError::io(
+                HataKodu::DosyaYazma,
+                format!("Vaka alt dizini olusturulamadi: {}", target_dir.display()),
+                err,
+            )
+        })?;
+        Ok(target_dir)
     }
 
     /// Kullanıcı notunu zaman damgalı dosya olarak notlar klasörüne yazar.
@@ -454,10 +465,15 @@ mod tests {
     fn creates_case_tree_and_notes() {
         let dir = tempfile::tempdir().unwrap();
         let vault = EvidenceVault::create(dir.path(), "case1").unwrap();
-        assert!(vault.outputs_dir.is_dir());
-        assert!(vault.ram_dir.is_dir());
+        assert!(vault.logs_dir.is_dir());
+        assert!(vault.notes_dir.is_dir());
+        // Edinim yapılan klasörler talep anında (on-demand) oluşturulur
+        assert!(!vault.android_dir.is_dir());
+        assert!(!vault.ios_dir.is_dir());
+        assert!(!vault.docker_dir.is_dir());
+        assert!(!vault.outputs_dir.is_dir());
+        let _ = vault.ensure_subdir("android");
         assert!(vault.android_dir.is_dir());
-        assert!(vault.ios_dir.is_dir());
         let note = vault.add_note("hello").unwrap();
         assert!(note.is_file());
         let summary = vault.summary().unwrap();
@@ -468,7 +484,7 @@ mod tests {
     fn writes_case_integrity_manifest() {
         let dir = tempfile::tempdir().unwrap();
         let vault = EvidenceVault::create(dir.path(), "case_manifest").unwrap();
-        fs::write(vault.outputs_dir.join("sample.txt"), "sample evidence").unwrap();
+        fs::write(vault.new_file("ciktilar", "sample.txt"), "sample evidence").unwrap();
 
         let manifest_path = vault.write_case_manifest().unwrap();
         assert!(manifest_path.is_file());
