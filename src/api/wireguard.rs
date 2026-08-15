@@ -1,9 +1,21 @@
 //! WireGuard yapılandırma dosyası üretimi ve bağlantı API uçlarını yönetir.
 use super::wireguard_manager;
 use crate::server::{Response, json_error, json_ok};
-use crate::wireguard::{self, WireGuardConfig};
+use crate::wireguard::{self, WireGuardConfig, WireGuardManager};
 use serde::Deserialize;
 use serde_json::json;
+use std::sync::MutexGuard;
+
+#[derive(Deserialize)]
+struct WireGuardFileRequest {
+    config_file: String,
+}
+
+fn lock_manager() -> Result<MutexGuard<'static, WireGuardManager>, Response> {
+    wireguard_manager()
+        .lock()
+        .map_err(|_| json_error(500, "wireguard manager lock failed"))
+}
 
 /// WireGuard config isteğini doğrular ve config dosyasını üretir.
 pub fn wireguard_config_endpoint(body: &[u8]) -> Response {
@@ -47,22 +59,16 @@ pub fn wireguard_config_endpoint(body: &[u8]) -> Response {
 
 /// Seçilen WireGuard config dosyasıyla bağlantıyı başlatır.
 pub fn wireguard_start_endpoint(body: &[u8]) -> Response {
-    #[derive(Deserialize)]
-    struct WireGuardStartRequest {
-        config_file: String,
-    }
-
-    let request: WireGuardStartRequest = match serde_json::from_slice(body) {
+    let request: WireGuardFileRequest = match serde_json::from_slice(body) {
         Ok(request) => request,
         Err(err) => return json_error(400, err.to_string()),
     };
     if request.config_file.trim().is_empty() {
         return json_error(400, "config_file is required");
     }
-    let manager = wireguard_manager();
-    let mut guard = match manager.lock() {
-        Ok(guard) => guard,
-        Err(_) => return json_error(500, "wireguard manager lock failed"),
+    let mut guard = match lock_manager() {
+        Ok(g) => g,
+        Err(resp) => return resp,
     };
     match guard.start(request.config_file.trim()) {
         Ok(()) => json_ok(json!({
@@ -75,10 +81,9 @@ pub fn wireguard_start_endpoint(body: &[u8]) -> Response {
 
 /// Aktif WireGuard bağlantısını durdurur.
 pub fn wireguard_stop_endpoint() -> Response {
-    let manager = wireguard_manager();
-    let mut guard = match manager.lock() {
-        Ok(guard) => guard,
-        Err(_) => return json_error(500, "wireguard manager lock failed"),
+    let mut guard = match lock_manager() {
+        Ok(g) => g,
+        Err(resp) => return resp,
     };
     match guard.stop() {
         Ok(()) => json_ok(json!({ "active": guard.is_active() })),
@@ -88,10 +93,9 @@ pub fn wireguard_stop_endpoint() -> Response {
 
 /// WireGuard manager'ın mevcut aktiflik durumunu döndürür.
 pub fn wireguard_status_endpoint() -> Response {
-    let manager = wireguard_manager();
-    let guard = match manager.lock() {
-        Ok(guard) => guard,
-        Err(_) => return json_error(500, "wireguard manager lock failed"),
+    let guard = match lock_manager() {
+        Ok(g) => g,
+        Err(resp) => return resp,
     };
     json_ok(json!({
         "interface_name": guard.interface_name,
