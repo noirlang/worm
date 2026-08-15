@@ -42,7 +42,7 @@ pub fn developer_log_endpoint(body: &[u8]) -> Response {
         "debug" => crate::logging::LogLevel::Debug,
         _ => crate::logging::LogLevel::Info,
     };
-    let scope = request.scope.unwrap_or_else(|| "ui".to_string());
+    let scope = request.scope.as_deref().unwrap_or("ui");
     crate::logging::runtime_log(level, scope, request.message);
     json_ok(json!({ "ok": true }))
 }
