@@ -37,10 +37,9 @@ pub fn open_url_endpoint(body: &[u8]) -> Response {
         Err(err) => return json_error(400, err),
     };
 
-    match open_external_url(&url) {
-        Ok(()) => json_ok(json!({ "opened": true })),
-        Err(err) => json_error(500, err),
-    }
+    open_external_url(&url)
+        .map(|()| json_ok(json!({ "opened": true })))
+        .unwrap_or_else(|err| json_error(500, err))
 }
 
 /// Native dosya/klasör seçici açar.
