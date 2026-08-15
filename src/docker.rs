@@ -140,9 +140,7 @@ pub struct DockerAcquisitionResult {
 
 /// Docker servis durumunu veya hedef dizindeki Docker varlığını kontrol eder.
 pub fn check_docker_status(custom_root: Option<&Path>) -> DockerSystemStatus {
-    let root_path = custom_root
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_DOCKER_ROOT));
+    let root_path = custom_root.unwrap_or_else(|| Path::new(DEFAULT_DOCKER_ROOT));
 
     let is_custom = custom_root.is_some();
     let containers_dir = root_path.join("containers");

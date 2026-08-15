@@ -13,7 +13,7 @@ use crate::output_format::{self, AcquisitionOutputFormat};
 use crate::ram;
 use crate::ram_analysis;
 use crate::remote::RemoteConnection;
-use crate::server::{Response, json_error, json_ok};
+use crate::server::{Response, json_error, json_ok, json_serialize};
 
 const VOLATILITY_LINUX_BANNERS_URL: &str = "https://raw.githubusercontent.com/Abyss-W4tcher/volatility3-symbols/master/banners/banners_plain.json";
 const VOLATILITY_LINUX_SYMBOL_RAW_BASE: &str =
@@ -677,7 +677,7 @@ pub fn ram_analyze_strings_endpoint(body: &[u8]) -> Response {
         return json_error(404, "Bellek dosyası bulunamadı / Memory file not found");
     }
     match ram_analysis::analyze_ram_strings(path) {
-        Ok(matches) => json_ok(serde_json::to_value(matches).unwrap_or(Value::Null)),
+        Ok(matches) => json_serialize(&matches),
         Err(err) => json_error(500, err.to_string()),
     }
 }
@@ -708,7 +708,7 @@ pub fn ram_analyze_summary_endpoint(body: &[u8]) -> Response {
         symbol_dir.as_deref(),
         None,
     ) {
-        Ok(summary) => json_ok(serde_json::to_value(summary).unwrap_or(Value::Null)),
+        Ok(summary) => json_serialize(&summary),
         Err(err) => json_error(500, err.to_string()),
     }
 }
@@ -736,7 +736,7 @@ pub fn ram_volatility_preflight_endpoint(body: &[u8]) -> Response {
     };
     let preflight =
         crate::volatility::preflight_ram_image(path, &os_type, symbol_dir.as_deref(), None);
-    json_ok(serde_json::to_value(preflight).unwrap_or(Value::Null))
+    json_serialize(&preflight)
 }
 
 /// Linux kernel sembol dosyasını indirip seçilen sembol klasörüne kurar.
@@ -989,7 +989,7 @@ pub fn ram_carve_files_endpoint(body: &[u8]) -> Response {
         Err(resp) => return resp,
     };
     match ram_analysis::carve_files(path, &vault.ram_dir) {
-        Ok(carved) => json_ok(serde_json::to_value(carved).unwrap_or(Value::Null)),
+        Ok(carved) => json_serialize(&carved),
         Err(err) => json_error(500, err.to_string()),
     }
 }
@@ -1332,7 +1332,7 @@ pub fn ram_process_search_endpoint(body: &[u8]) -> Response {
     }
 
     match ram_analysis::search_raw_memory(path, &request.query) {
-        Ok(matches) => json_ok(serde_json::to_value(matches).unwrap_or(Value::Null)),
+        Ok(matches) => json_serialize(&matches),
         Err(err) => json_error(500, err.to_string()),
     }
 }
