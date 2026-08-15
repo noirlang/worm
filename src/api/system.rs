@@ -104,21 +104,28 @@ pub fn connect_endpoint(body: &[u8]) -> Response {
 pub fn disk_list_endpoint() -> Response {
     match disk::list_disks() {
         Ok(disks) => {
-            if should_request_elevated_disk_list(&disks) {
-                match elevated_disk_list() {
-                    Ok(elevated_disks) if !elevated_disks.is_empty() => {
-                        json_ok(json!({ "disks": elevated_disks, "elevated": true }))
+            let (disks_to_return, elevated, elevation_error) =
+                if should_request_elevated_disk_list(&disks) {
+                    match elevated_disk_list() {
+                        Ok(elevated_disks) if !elevated_disks.is_empty() => {
+                            (elevated_disks, true, None)
+                        }
+                        Ok(_) => (disks, true, None),
+                        Err(err) => (
+                            disks,
+                            false,
+                            Some(crate::diagnostics::error_with_advice(&err)),
+                        ),
                     }
-                    Ok(_) => json_ok(json!({ "disks": disks, "elevated": true })),
-                    Err(err) => json_ok(json!({
-                        "disks": disks,
-                        "elevated": false,
-                        "elevation_error": crate::diagnostics::error_with_advice(&err),
-                    })),
-                }
-            } else {
-                json_ok(json!({ "disks": disks, "elevated": false }))
-            }
+                } else {
+                    (disks, false, None)
+                };
+
+            json_ok(json!({
+                "disks": disks_to_return,
+                "elevated": elevated,
+                "elevation_error": elevation_error,
+            }))
         }
         Err(err) => match elevated_disk_list() {
             Ok(disks) => json_ok(json!({ "disks": disks, "elevated": true })),
