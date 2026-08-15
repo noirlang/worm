@@ -411,8 +411,7 @@ exit 1
 /// PATH içinde program var mı hızlıca kontrol eder.
 fn command_in_path(program: &str) -> bool {
     std::env::var_os("PATH")
-        .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
-        .unwrap_or(false)
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
 }
 
 #[cfg(windows)]
