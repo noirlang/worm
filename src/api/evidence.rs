@@ -5,7 +5,7 @@ use crate::api::{
 };
 use crate::evidence::{EvidenceVault, relative_case_path};
 use crate::report::{self, ReportFormat, ReportInfo};
-use crate::server::{Response, json_error, json_ok};
+use crate::server::{Response, json_error, json_ok, json_serialize};
 use chrono::Local;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -37,23 +37,7 @@ pub fn evidence_create_endpoint(body: &[u8]) -> Response {
                 Err(err) => return json_error(500, err.to_string()),
             };
             set_current_evidence_case(base_dir, case_name);
-            json_ok(json!({
-                "case_name": summary.case_name,
-                "case_dir": summary.case_dir,
-                "base_dir": default_case_base_dir(),
-                "output_dir": vault.outputs_dir,
-                "ram_dir": vault.ram_dir,
-                "android_dir": vault.android_dir,
-                "ios_dir": vault.ios_dir,
-                "created_by": summary.created_by,
-                "created_by_name": summary.created_by_name,
-                "output_count": summary.output_count,
-                "android_count": summary.android_count,
-                "ios_count": summary.ios_count,
-                "hash_count": summary.hash_count,
-                "report_count": summary.report_count,
-                "manifest_path": summary.manifest_path,
-            }))
+            json_serialize(&summary)
         }
         Err(err) => json_error(500, err.to_string()),
     }
