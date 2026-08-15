@@ -96,27 +96,26 @@ pub fn acquisition_control_endpoint(body: &[u8]) -> Response {
 fn apply_local_acquisition_control(job_id: &str, action: &str) -> Option<String> {
     let mut jobs = acquisition_jobs().lock().ok()?;
     let job = jobs.get_mut(job_id)?;
-    match action {
+    let (msg, ret) = match action {
         "pause" => {
             job.control.pause();
             job.status = "paused".to_string();
-            job.message = "Duraklatma komutu uygulandı".to_string();
-            Some("Duraklatma komutu uygulandi".to_string())
+            ("Duraklatma komutu uygulandı", "Duraklatma komutu uygulandi")
         }
         "resume" => {
             job.control.resume();
             job.status = "running".to_string();
-            job.message = "Devam komutu uygulandı".to_string();
-            Some("Devam komutu uygulandi".to_string())
+            ("Devam komutu uygulandı", "Devam komutu uygulandi")
         }
         "stop" => {
             job.control.cancel();
             disk::cancel_disk_acquisition();
-            job.message = "Durdurma komutu uygulandı".to_string();
-            Some("Durdurma komutu uygulandi".to_string())
+            ("Durdurma komutu uygulandı", "Durdurma komutu uygulandi")
         }
-        _ => None,
-    }
+        _ => return None,
+    };
+    job.message = msg.to_string();
+    Some(ret.to_string())
 }
 
 /// Bellekte tutulan edinim işini ID ile döndürür.
