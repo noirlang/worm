@@ -175,13 +175,13 @@ fn collect_dirs_with_file(dir: &Path, file_name: &str, candidates: &mut Vec<Path
 }
 
 /// JSON dosyasını sessizce okuyup parse eder; yoksa None döner.
-fn read_json(path: PathBuf) -> Option<Value> {
+fn read_json(path: impl AsRef<Path>) -> Option<Value> {
     let content = fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
 }
 
 /// Büyük rapor dosyasından arayüz için sınırlı ön izleme metni üretir.
-fn read_text_preview(path: PathBuf) -> String {
+fn read_text_preview(path: impl AsRef<Path>) -> String {
     let Ok(content) = fs::read_to_string(path) else {
         return String::new();
     };
@@ -239,7 +239,7 @@ fn timeline_summary(timeline: Option<&Value>) -> (usize, usize, Vec<Value>) {
 }
 
 /// Uçucu veri raporundaki başlıkları bölüm listesi olarak çıkarır.
-fn volatile_sections(path: PathBuf) -> Vec<String> {
+fn volatile_sections(path: impl AsRef<Path>) -> Vec<String> {
     let Ok(content) = fs::read_to_string(path) else {
         return Vec::new();
     };

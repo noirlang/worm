@@ -75,10 +75,6 @@ pub fn locate_vol_py() -> Option<PathBuf> {
         &mut paths,
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("vendor/volatility3"),
     );
-    push_volatility_candidate(
-        &mut paths,
-        PathBuf::from("/home/raodrin/Belgeler/forensic/volatility3"),
-    );
 
     paths
         .into_iter()

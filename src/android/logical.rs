@@ -1735,9 +1735,9 @@ fn parse_debuggable_packages(dumpsys_package: &str) -> Vec<String> {
             || trimmed.contains("FLAG_DEBUGGABLE")
             || trimmed.contains("debuggable=true");
         if debuggable {
-            if let Some(package) = &current_package {
+            if let Some(package) = current_package.take() {
                 if seen.insert(package.clone()) {
-                    packages.push(package.clone());
+                    packages.push(package);
                 }
             }
         }
