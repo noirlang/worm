@@ -40,20 +40,15 @@ pub fn hash_endpoint(body: &[u8]) -> Response {
 
 /// API'den gelen hash algoritması stringlerini enum listesine çevirir.
 fn parse_algorithms(values: Option<Vec<String>>) -> Result<Vec<HashAlgorithm>, String> {
-    let values = values.unwrap_or_else(|| {
-        vec![
-            "md5".to_string(),
-            "sha1".to_string(),
-            "sha256".to_string(),
-            "sha512".to_string(),
-        ]
-    });
-
-    let mut algorithms = Vec::new();
-    for value in values {
-        let algorithm = HashAlgorithm::parse(&value)
-            .ok_or_else(|| format!("unsupported hash algorithm: {value}"))?;
-        algorithms.push(algorithm);
-    }
-    Ok(algorithms)
+    let Some(list) = values else {
+        return Ok(vec![
+            HashAlgorithm::Md5,
+            HashAlgorithm::Sha1,
+            HashAlgorithm::Sha256,
+            HashAlgorithm::Sha512,
+        ]);
+    };
+    list.iter()
+        .map(|v| HashAlgorithm::parse(v).ok_or_else(|| format!("unsupported hash algorithm: {v}")))
+        .collect()
 }
