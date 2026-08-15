@@ -121,11 +121,9 @@ pub fn update_check_endpoint() -> Response {
         .unwrap_or_default();
     let update_target = current_update_target();
     let platform_asset = preferred_update_asset(&assets, &update_target);
-    let asset_error = if platform_asset.is_null() {
-        Some(missing_platform_asset_message(&update_target, &assets))
-    } else {
-        None
-    };
+    let asset_error = platform_asset
+        .is_null()
+        .then(|| missing_platform_asset_message(&update_target, &assets));
 
     json_ok(json!({
         "current_version": env!("CARGO_PKG_VERSION"),
