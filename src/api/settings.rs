@@ -54,24 +54,17 @@ pub fn settings_save_endpoint(body: &[u8]) -> Response {
     settings.normalize();
     match settings.save(&path) {
         Ok(()) => {
-            let _ = crate::profile::update_active_preferences(
-                &settings.dil,
-                if settings.karanlik_tema {
-                    "dark"
-                } else {
-                    "light"
-                },
-            );
+            let theme_str = if settings.karanlik_tema {
+                "dark"
+            } else {
+                "light"
+            };
+            let _ = crate::profile::update_active_preferences(&settings.dil, theme_str);
             crate::logging::runtime_log(
                 crate::logging::LogLevel::Info,
                 "api:settings",
                 format!(
-                    "Ayarlar kaydedildi: theme={} language={} path={}",
-                    if settings.karanlik_tema {
-                        "dark"
-                    } else {
-                        "light"
-                    },
+                    "Ayarlar kaydedildi: theme={theme_str} language={} path={}",
                     settings.dil,
                     path.display()
                 ),
