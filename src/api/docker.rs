@@ -50,9 +50,16 @@ pub struct RemoteDockerAcquisitionRequest {
     pub case_name: Option<String>,
 }
 
+fn parse_docker_root_path(custom_root: Option<&str>) -> Option<&Path> {
+    custom_root
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(Path::new)
+}
+
 /// Yerel veya bağlanmış imajdaki Docker sistem durumunu döner.
 pub fn docker_status_endpoint(custom_root: Option<&str>) -> Response {
-    let path_opt = custom_root.filter(|s| !s.trim().is_empty()).map(Path::new);
+    let path_opt = parse_docker_root_path(custom_root);
     let status = check_docker_status(path_opt);
     json_ok(json!({
         "durum": "ok",
@@ -62,7 +69,7 @@ pub fn docker_status_endpoint(custom_root: Option<&str>) -> Response {
 
 /// Yerel veya bağlanmış imajdaki Docker konteynerlerini listeler ve güvenlik analizini döner.
 pub fn docker_containers_endpoint(custom_root: Option<&str>) -> Response {
-    let path_opt = custom_root.filter(|s| !s.trim().is_empty()).map(Path::new);
+    let path_opt = parse_docker_root_path(custom_root);
     match list_containers(path_opt) {
         Ok(containers) => json_ok(json!({
             "durum": "ok",
@@ -80,11 +87,7 @@ pub fn docker_logs_endpoint(body: &[u8]) -> Response {
         Err(err) => return json_error(400, format!("Gecersiz istek JSON: {}", err)),
     };
 
-    let path_opt = req
-        .custom_docker_root
-        .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .map(Path::new);
+    let path_opt = parse_docker_root_path(req.custom_docker_root.as_deref());
     let tail = req.tail.unwrap_or(200);
 
     match get_container_logs(&req.container_id, tail, path_opt) {
