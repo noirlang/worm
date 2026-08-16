@@ -1786,6 +1786,11 @@ code {
   line-height: 1.7;
 }
 
+.about-hero .status-badge {
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
 .about-logo {
   display: grid;
   place-items: center;
@@ -1885,6 +1890,12 @@ code {
   color: var(--text);
   text-decoration: none;
   transition: transform 180ms var(--ease), border-color 180ms var(--ease), background 180ms var(--ease);
+}
+
+.social-button svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .social-button:hover,
