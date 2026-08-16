@@ -25,6 +25,14 @@ globalThis.window = {
   addEventListener: () => {}
 };
 globalThis.location = globalThis.window.location;
+if (typeof globalThis.navigator === "undefined") {
+  globalThis.navigator = { userAgent: "Mozilla/5.0 (X11; Linux x86_64)", platform: "Linux x86_64" };
+} else {
+  try {
+    Object.defineProperty(globalThis.navigator, "userAgent", { value: "Mozilla/5.0 (X11; Linux x86_64)", configurable: true });
+    Object.defineProperty(globalThis.navigator, "platform", { value: "Linux x86_64", configurable: true });
+  } catch (_) {}
+}
 globalThis.document = {
   documentElement: {
     classList: { add: () => {} },

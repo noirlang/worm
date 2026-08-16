@@ -1,7 +1,9 @@
 export function detectPlatform() {
-  const override = new URLSearchParams(window.location.search).get("platform");
+  const override = typeof window !== "undefined" && window.location ? new URLSearchParams(window.location.search).get("platform") : null;
   if (["windows", "linux", "android", "mac"].includes(override || "")) return override;
-  const text = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
+  const ua = typeof navigator !== "undefined" && navigator.userAgent ? navigator.userAgent : "";
+  const plat = typeof navigator !== "undefined" && navigator.platform ? navigator.platform : "";
+  const text = `${ua} ${plat}`.toLowerCase();
   if (text.includes("android")) return "android";
   if (text.includes("win")) return "windows";
   if (text.includes("linux")) return "linux";
