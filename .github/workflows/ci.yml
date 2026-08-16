@@ -18,7 +18,7 @@ env:
 jobs:
   metadata:
     name: Commit metadata
-    if: contains(github.event.head_commit.message, '[build]') || github.event_name == 'workflow_dispatch'
+    if: contains(github.event.head_commit.message, '[build]') || github.event_name == 'workflow_dispatch' || github.actor == 'nektos/act'
     runs-on: ubuntu-24.04
     outputs:
       asset_suffix: ${{ steps.commit.outputs.asset_suffix }}
@@ -34,8 +34,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          subject="$(git log -1 --pretty=%s)"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" 2>/dev/null || true
+          subject="$(git log -1 --pretty=%s 2>/dev/null || echo 'commit')"
           short_sha="${GITHUB_SHA:0:12}"
+          if [[ -z "$short_sha" ]]; then
+            short_sha="$(git rev-parse --short=12 HEAD 2>/dev/null || echo 'localbuild000')"
+          fi
           ascii_subject="$(printf '%s' "$subject" \
             | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null || true)"
           slug="$(printf '%s' "$ascii_subject" \
@@ -48,7 +52,7 @@ jobs:
           echo "asset_suffix=${slug}-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "release_title=${short_sha}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
-          echo "tag=commit-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag=commit-${short_sha}" >> "$GITHUB_OUTPUT"
 
   quality:
     name: Tests and static checks
@@ -57,6 +61,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -64,24 +73,34 @@ jobs:
 
       - name: Install Rust
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt
-          rustup default stable
+          if ! command -v rustup &> /dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal --component rustfmt
+            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+            export PATH="$HOME/.cargo/bin:$PATH"
+          else
+            rustup toolchain install stable --profile minimal --component rustfmt
+            rustup default stable
+          fi
 
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo fmt --all -- --check
 
       - name: Check UI JavaScript
         run: node --check ui/app.js
 
       - name: Run Rust tests
-        run: cargo test --locked
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo test --locked
 
       - name: Run UI tests
         run: node --test tests/routes.test.js
 
   release-init:
     name: Prepare commit prerelease
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.actor != 'nektos/act'
     needs:
       - metadata
       - quality
@@ -167,6 +186,7 @@ jobs:
             "release-assets/amele-forensic-tool-${ASSET_SUFFIX}-linux-x64.pkg.tar.zst"
 
       - name: Upload Linux packages to release
+        if: github.actor != 'nektos/act'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
@@ -259,6 +279,7 @@ jobs:
             "release-assets\amele-forensic-tool-$env:ASSET_SUFFIX-windows-x64.msi"
 
       - name: Upload Windows MSI to release
+        if: github.actor != 'nektos/act'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
@@ -275,7 +296,7 @@ jobs:
 
   release:
     name: Finalize commit prerelease
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.actor != 'nektos/act'
     needs:
       - metadata
       - linux-packages

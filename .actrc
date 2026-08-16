@@ -1,0 +1,3 @@
+-P ubuntu-24.04=catthehacker/ubuntu:act-latest
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P windows-2022=catthehacker/ubuntu:act-latest
