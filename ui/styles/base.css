@@ -1554,16 +1554,16 @@ code {
 .settings-meta span {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   width: fit-content;
-  min-height: 36px;
-  margin-top: 14px;
-  padding: 0 12px;
+  padding: 8px 14px;
   border-radius: 999px;
   background: rgba(101, 229, 138, 0.08);
   color: var(--green);
   font-weight: 800;
   font-size: 13px;
+  line-height: 1;
 }
 
 .settings-meta span {
