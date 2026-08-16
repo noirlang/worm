@@ -1076,7 +1076,25 @@ where
             .and_then(|u| u.as_str())
             .map(PathBuf::from);
 
-                })?;
+        if let Some(upper_dir) = upper_dir_path {
+            if upper_dir.exists() && upper_dir.is_dir() {
+                progress_callback(
+                    "Overlay2 UpperDir dosyaları .tar.gz olarak arşivleniyor...",
+                    70,
+                    100,
+                );
+
+                let tar_gz_file = target_case_dir.join("upper_drift_files.tar.gz");
+                let out_file = match File::create(&tar_gz_file) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        return Err(AmeleError::io(
+                            HataKodu::DosyaYazma,
+                            format!("Arşiv dosyası oluşturulamadı: {}", tar_gz_file.display()),
+                            e,
+                        ));
+                    }
+                };
 
                 let enc = GzEncoder::new(out_file, Compression::default());
                 let mut tar_builder = Builder::new(enc);

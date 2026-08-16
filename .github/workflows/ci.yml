@@ -150,7 +150,6 @@ jobs:
     name: AppImage, DEB, RPM and Arch
     needs:
       - metadata
-      - release-init
     runs-on: ubuntu-24.04
     permissions:
       contents: write
