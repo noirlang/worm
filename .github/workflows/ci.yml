@@ -35,22 +35,14 @@ jobs:
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE" 2>/dev/null || true
-          subject="$(git log -1 --pretty=%s 2>/dev/null || echo 'commit')"
+          commit_ts="$(git log -1 --pretty=%ct 2>/dev/null || date +%s)"
+          commit_time="$(TZ='Europe/Istanbul' date -d "@$commit_ts" +'%Y%m%d-%H%M' 2>/dev/null || TZ='Europe/Istanbul' date +'%Y%m%d-%H%M')"
           short_sha="${GITHUB_SHA:0:12}"
           if [[ -z "$short_sha" ]]; then
             short_sha="$(git rev-parse --short=12 HEAD 2>/dev/null || echo 'localbuild000')"
           fi
-          ascii_subject="$(printf '%s' "$subject" \
-            | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null || true)"
-          slug="$(printf '%s' "$ascii_subject" \
-            | tr '[:upper:]' '[:lower:]' \
-            | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g; s/-+/-/g' \
-            | cut -c1-56)"
-          if [[ -z "$slug" ]]; then
-            slug="commit"
-          fi
-          echo "asset_suffix=${slug}-${short_sha}" >> "$GITHUB_OUTPUT"
-          echo "release_title=${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "asset_suffix=${commit_time}" >> "$GITHUB_OUTPUT"
+          echo "release_title=${commit_time} (${short_sha})" >> "$GITHUB_OUTPUT"
           echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
           echo "tag=commit-${short_sha}" >> "$GITHUB_OUTPUT"
 
@@ -176,13 +168,13 @@ jobs:
           set -euo pipefail
           mkdir -p release-assets
           cp dist/amele-linux-x64.AppImage \
-            "release-assets/amele-forensic-tool-${ASSET_SUFFIX}-linux-x64.AppImage"
+            "release-assets/amele-x64-${ASSET_SUFFIX}.AppImage"
           cp dist/amele-linux-x64.deb \
-            "release-assets/amele-forensic-tool-${ASSET_SUFFIX}-linux-x64.deb"
+            "release-assets/amele-x64-${ASSET_SUFFIX}.deb"
           cp dist/amele-linux-x64.rpm \
-            "release-assets/amele-forensic-tool-${ASSET_SUFFIX}-linux-x64.rpm"
+            "release-assets/amele-x64-${ASSET_SUFFIX}.rpm"
           cp dist/amele-linux-x64.pkg.tar.zst \
-            "release-assets/amele-forensic-tool-${ASSET_SUFFIX}-linux-x64.pkg.tar.zst"
+            "release-assets/amele-x64-${ASSET_SUFFIX}.pkg.tar.zst"
 
       - name: Upload Linux packages to release
         if: github.actor != 'nektos/act'
@@ -275,7 +267,7 @@ jobs:
         run: |
           New-Item release-assets -ItemType Directory -Force | Out-Null
           Copy-Item dist\amele-windows-x64.msi `
-            "release-assets\amele-forensic-tool-$env:ASSET_SUFFIX-windows-x64.msi"
+            "release-assets\amele-x64-$env:ASSET_SUFFIX.msi"
 
       - name: Upload Windows MSI to release
         if: github.actor != 'nektos/act'
@@ -316,12 +308,12 @@ jobs:
           gh release download "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --dir release-assets \
-            --pattern 'amele-forensic-tool-*'
+            --pattern 'amele-x64-*'
 
           cd release-assets
           find . -name '*SHA256SUMS.txt' -delete
-          sha256sum amele-forensic-tool-* \
-            > "amele-forensic-tool-${ASSET_SUFFIX}-SHA256SUMS.txt"
+          sha256sum amele-x64-* \
+            > "amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt"
 
       - name: Upload checksums
         env:
@@ -332,6 +324,6 @@ jobs:
         run: |
           set -euo pipefail
           gh release upload "$RELEASE_TAG" \
-            "release-assets/amele-forensic-tool-${ASSET_SUFFIX}-SHA256SUMS.txt" \
+            "release-assets/amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt" \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
