@@ -4,6 +4,7 @@ import { dockerPage, handleDockerAction } from "./tools/docker/index.js";
 import { windowsPage } from "./tools/windows/index.js";
 import { linuxPage } from "./tools/linux/index.js";
 import { agentPage } from "./tools/agent/index.js";
+import { remoteAcqPage } from "./tools/remote-acq/index.js";
 import { analysisPage } from "./tools/analysis/index.js";
 import { createApiRequest } from "./core/api.js";
 import { errorBoxHtml } from "./core/errors.js";
@@ -860,6 +861,7 @@ const routes = {
   ios: () => "",
   docker: dockerPage,
   agent: agentPage,
+  "remote-acq": remoteAcqPage,
   analysis: analysisPage,
   profile: profilePage,
   other: otherPage,
