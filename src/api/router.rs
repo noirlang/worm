@@ -3,7 +3,7 @@ use crate::server::{Response, json_error, json_ok};
 
 use super::{
     acquisition_control, android, desktop, developer, docker, evidence, hash_api, ios, profile,
-    ram, settings, storage, system, update, wireguard,
+    ram, settings, ssh, storage, system, update, wireguard,
 };
 
 /// API HTTP metod/path çiftini ilgili endpoint fonksiyonuna yönlendirir ve detaylıca loglar.
@@ -337,6 +337,46 @@ pub fn route_api(method: &str, path: &str, body: &[u8]) -> Response {
                 "Uzak ajan arac kontrolu yapiliyor",
             );
             system::remote_tool_check_endpoint(body)
+        }
+        ("POST", "/api/ssh-connect") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:ssh",
+                "SSH sunucu baglanti testi yapiliyor",
+            );
+            ssh::ssh_connect_endpoint(body)
+        }
+        ("POST", "/api/ssh-disks") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:ssh",
+                "SSH ile uzak disk listesi sorgulaniyor",
+            );
+            ssh::ssh_disks_endpoint(body)
+        }
+        ("POST", "/api/ssh-tool-check") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:ssh",
+                "SSH ile RAM araclari kontrol ediliyor",
+            );
+            ssh::ssh_tool_check_endpoint(body)
+        }
+        ("POST", "/api/ssh-image") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:ssh",
+                "SSH ile uzak disk imaj alma isi baslatiliyor",
+            );
+            ssh::ssh_image_endpoint(body)
+        }
+        ("POST", "/api/ssh-ram") => {
+            crate::logging::runtime_log(
+                crate::logging::LogLevel::Info,
+                "api:ssh",
+                "SSH ile uzak RAM edinim isi baslatiliyor",
+            );
+            ssh::ssh_ram_endpoint(body)
         }
         ("POST", "/api/evidence-create") => {
             crate::logging::runtime_log(

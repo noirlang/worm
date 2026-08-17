@@ -18,6 +18,7 @@ flate2 = "1"
 regex = "1"
 tar = "0.4"
 ureq = { version = "2.12", default-features = true }
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

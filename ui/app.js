@@ -1279,6 +1279,23 @@ function connectionPayload() {
   };
 }
 
+function sshPayload() {
+  const ip = document.querySelector("[data-field='ip']")?.value.trim() || "";
+  const port = Number(document.querySelector("[data-field='port']")?.value.trim() || 22);
+  const user = document.querySelector("[data-field='ssh-user']")?.value.trim() || "";
+  const password = document.querySelector("[data-field='ssh-pass']")?.value || "";
+  const keyPath = document.querySelector("#ssh-key-file")?.value.trim() || "";
+  if (!ip) throw new Error(t("connection.ipPortRequired"));
+  if (!user) throw new Error("SSH kullanıcı adı gereklidir");
+  return {
+    ip,
+    port: port || 22,
+    user,
+    password: password || null,
+    key_path: keyPath || null
+  };
+}
+
 function vpnPayload() {
   const endpoint = document.querySelector("[data-field='vpn-endpoint']")?.value.trim() || "";
   const configFile = document.querySelector("#vpn-config-file")?.value.trim() || "";
@@ -1797,9 +1814,10 @@ async function handleAction(button) {
   if (action === "connect") {
     const workflowId = currentWorkflowId();
     const workflow = currentWorkflow();
+    const isSsh = workflow?.mode.startsWith("ssh");
     let payload;
     try {
-      payload = connectionPayload();
+      payload = isSsh ? sshPayload() : connectionPayload();
     } catch (error) {
       showToast(error.message, "error");
       return;
@@ -1812,7 +1830,7 @@ async function handleAction(button) {
       showToast(t("connection.invalidPort"), "error");
       return;
     }
-    if (!workflow?.mode.startsWith("remote")) {
+    if (!workflow?.mode.startsWith("remote") && !isSsh) {
       showToast(t("connection.remoteOnly"), "error");
       return;
     }
@@ -1822,7 +1840,8 @@ async function handleAction(button) {
     updateSide("connection", t("connection.connecting"));
     writeWorkflowLog(t("connection.starting", { host: `${payload.ip}:${payload.port}` }));
     try {
-      const result = await apiRequest("/api/connect", {
+      const endpoint = isSsh ? "/api/ssh-connect" : "/api/connect";
+      const result = await apiRequest(endpoint, {
         method: "POST",
         body: JSON.stringify(payload)
       });
@@ -2633,7 +2652,28 @@ async function scanTargets() {
   if (backendReady()) {
     try {
       let disks = [];
-      if (workflow.mode.startsWith("remote")) {
+      if (workflow.mode.startsWith("ssh")) {
+        const payload = sshPayload();
+        if (workflow.mode.includes("ram")) {
+          const result = await apiRequest("/api/ssh-tool-check", {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
+          const status = result.status || {};
+          updateSide("target", status.tool_path || "AVML / kcore");
+          updateSide("connection", t("connection.alive", { host: `${payload.ip}:${payload.port}` }));
+          writeWorkflowLog(`SSH RAM Kontrolü: ${status.message || "Hazır"}`);
+          showToast(`SSH RAM kontrolü: ${status.message || "Hazır"}`);
+          return;
+        } else {
+          const result = await apiRequest("/api/ssh-disks", {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
+          disks = result.disks || [];
+          updateSide("connection", t("connection.alive", { host: `${payload.ip}:${payload.port}` }));
+        }
+      } else if (workflow.mode.startsWith("remote")) {
         const payload = connectionPayload();
         if (!payload.ip || !payload.port) {
           showToast(t("connection.ipPortRequired"), "error");
@@ -2967,56 +3007,82 @@ async function startAcquisition(button) {
   const workflow = workflows[routeId];
   const isRam = workflow?.mode.includes("ram");
   let payload = null;
-  if (workflow?.mode.startsWith("remote")) {
-    try {
-      payload = connectionPayload();
-    } catch (error) {
-      showToast(error.message, "error");
+    const isSsh = workflow?.mode.startsWith("ssh");
+    if (isSsh) {
+      try {
+        payload = sshPayload();
+      } catch (error) {
+        showToast(error.message, "error");
+        return;
+      }
+    } else if (workflow?.mode.startsWith("remote")) {
+      try {
+        payload = connectionPayload();
+      } catch (error) {
+        showToast(error.message, "error");
+        return;
+      }
+      if (!requireActiveConnection(workflow, payload)) return;
+    }
+    const target = document.querySelector("[data-field='target']")?.value.trim();
+    const outputFormat = document.querySelector("[data-field='output-format']")?.value || "raw";
+    if (workflow && !workflow.mode.includes("ram") && !target) {
+      showToast(t("workflow.diskRequired"), "error");
       return;
     }
-    if (!requireActiveConnection(workflow, payload)) return;
-  }
-  const target = document.querySelector("[data-field='target']")?.value.trim();
-  const outputFormat = document.querySelector("[data-field='output-format']")?.value || "raw";
-  if (workflow && !workflow.mode.includes("ram") && !target) {
-    showToast(t("workflow.diskRequired"), "error");
-    return;
-  }
-  let output = document.querySelector("#workflow-output")?.value.trim() || "";
-  const diskName = isRam ? "" : selectedTargetName();
-  let caseName = null;
-  button.disabled = true;
-  window.clearInterval(state.jobs.workflow);
-  setProgress(0, "0%");
-  const operation = isRam ? t("ramAcquisition") : t("imageAcquisition");
+    let output = document.querySelector("#workflow-output")?.value.trim() || "";
+    const diskName = isRam ? "" : selectedTargetName();
+    let caseName = null;
+    button.disabled = true;
+    window.clearInterval(state.jobs.workflow);
+    setProgress(0, "0%");
+    const operation = isRam ? t("ramAcquisition") : t("imageAcquisition");
 
-  try {
-    setAcquisitionControlsVisible(true, button);
-    await loadEvidenceCases();
-    const evidenceCase = await ensureImageCase();
-    caseName = evidenceCase.case_name;
-    if (isRam) {
-      const remoteIp = workflow?.mode.startsWith("remote") ? payload?.ip : "";
-      const fileName = canonicalRamFileName(remoteIp);
-      const outputInput = document.querySelector("#workflow-output");
-      if (outputInput) outputInput.value = fileName;
-      const ramDir = evidenceCase.ram_dir || `${evidenceCase.case_dir}/ram`;
-      output = `${ramDir}/${fileName}`;
-    } else {
-      output = evidenceCase.output_dir || `${evidenceCase.case_dir}/ciktilar`;
-    }
-    document.querySelectorAll("[data-case-output]").forEach((outputNode) => {
-      outputNode.textContent = outputNode.dataset.caseOutputSubdir === "ram"
-        ? (evidenceCase.ram_dir || `${evidenceCase.case_dir}/ram`)
-        : (evidenceCase.output_dir || `${evidenceCase.case_dir}/ciktilar`);
-    });
+    try {
+      setAcquisitionControlsVisible(true, button);
+      await loadEvidenceCases();
+      const evidenceCase = await ensureImageCase();
+      caseName = evidenceCase.case_name;
+      if (isRam) {
+        const remoteIp = (workflow?.mode.startsWith("remote") || isSsh) ? payload?.ip : "";
+        const fileName = canonicalRamFileName(remoteIp);
+        const outputInput = document.querySelector("#workflow-output");
+        if (outputInput) outputInput.value = fileName;
+        const ramDir = evidenceCase.ram_dir || `${evidenceCase.case_dir}/ram`;
+        output = `${ramDir}/${fileName}`;
+      } else {
+        output = evidenceCase.output_dir || `${evidenceCase.case_dir}/ciktilar`;
+      }
+      document.querySelectorAll("[data-case-output]").forEach((outputNode) => {
+        outputNode.textContent = outputNode.dataset.caseOutputSubdir === "ram"
+          ? (evidenceCase.ram_dir || `${evidenceCase.case_dir}/ram`)
+          : (evidenceCase.output_dir || `${evidenceCase.case_dir}/ciktilar`);
+      });
 
-    writeWorkflowLog(t("workflow.operationStarted", { operation }));
-    updateSide("last-action", t("workflow.operationRunning", { operation }));
-    if (workflow?.mode.startsWith("remote")) updateSide("connection", t("workflow.operationRunning", { operation }));
+      writeWorkflowLog(t("workflow.operationStarted", { operation }));
+      updateSide("last-action", t("workflow.operationRunning", { operation }));
+      if (workflow?.mode.startsWith("remote") || isSsh) updateSide("connection", t("workflow.operationRunning", { operation }));
 
-    const start = workflow?.mode.startsWith("remote")
-      ? await apiRequest(isRam ? "/api/remote-ram" : "/api/remote-image", {
+      const start = isSsh
+        ? await apiRequest(isRam ? "/api/ssh-ram" : "/api/ssh-image", {
+            method: "POST",
+            body: JSON.stringify(isRam
+              ? {
+                  ...payload,
+                  output,
+                  case_name: caseName,
+                  output_format: outputFormat
+                }
+              : {
+                  ...payload,
+                  disk_path: target,
+                  output,
+                  case_name: caseName,
+                  output_format: outputFormat
+                })
+          })
+        : workflow?.mode.startsWith("remote")
+        ? await apiRequest(isRam ? "/api/remote-ram" : "/api/remote-image", {
           method: "POST",
           body: JSON.stringify(isRam
             ? {

@@ -25,6 +25,7 @@ pub mod report;
 pub mod router;
 pub mod server;
 pub mod settings;
+pub mod ssh;
 pub mod storage_guard;
 pub mod volatility;
 pub mod wireguard;

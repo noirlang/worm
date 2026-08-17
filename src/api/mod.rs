@@ -16,6 +16,7 @@ pub mod ram;
 mod ram_tools;
 mod router;
 pub mod settings;
+pub mod ssh;
 mod state;
 pub mod storage;
 pub mod system;
