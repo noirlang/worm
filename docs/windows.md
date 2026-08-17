@@ -91,6 +91,25 @@ Hedef Windows makineye `amele-win` ajanı yerleştirilir ve TCP üzerinden JSON 
 | `ram_edinim_baslat` | WinPMEM'i uzaktan başlatır, RAM bellek dökümünü alır |
 | `ram_dosya_indir` | Alınan RAM dökümünü ağ üzerinden indirir |
 
+### Agentsız Uzak İmaj ve RAM Edinimi (OpenSSH / WinRM)
+
+Hedef Windows makineye hiçbir ajan yüklemeden, yerel Windows OpenSSH servisi veya WinRM üzerinden doğrudan `PhysicalDrive` ve WinPMEM bellek edinimini gerçekleştirir.
+
+#### Desteklenen İşlemler:
+- **Disk Tarama:** `Get-CimInstance Win32_DiskDrive` veya `wmic diskdrive` ile tüm `PhysicalDrive` sürücülerini JSON olarak listeler.
+- **Disk İmajı:** `PhysicalDrive[0-31]` üzerinden doğrudan ham binary stream ile disk kopyasını çeker.
+- **RAM Edinimi:** `winpmem.exe` aracını uzaktan tetikleyerek bellek dökümünü canlı pipe ile yerel vakaya aktarır.
+- **Format Desteği:** RAW (`.raw` / `.img`) veya AFF4 (`.aff4`) olarak vaka klasörüne kaydeder.
+- **Canlı Hashleme:** İndirme esnasında eşzamanlı SHA-256 ve MD5 hash üretir.
+
+#### CLI Komutları:
+```bash
+amele ssh-disks <ip> <kullanici> [port] [parola] [anahtar_yolu]
+amele ssh-tool-check <ip> <kullanici> [port] [parola] [anahtar_yolu]
+amele ssh-image <ip> <kullanici> <PhysicalDriveN> <cikti_klasoru> [vaka_adi] [port] [parola] [anahtar_yolu] [raw|aff4]
+amele ssh-ram <ip> <kullanici> <cikti_klasoru> [vaka_adi] [port] [parola] [anahtar_yolu] [raw|aff4]
+```
+
 ### Çıktı Klasör Yapısı
 
 ```
@@ -198,6 +217,25 @@ A `amele-win` agent is deployed on the target Windows machine, communicating ove
 | `winpmem_kontrol` | Is WinPMEM present on agent? Administrator privilege? RAM size? |
 | `ram_edinim_baslat` | Starts WinPMEM remotely, captures RAM dump |
 | `ram_dosya_indir` | Downloads captured RAM dump over the network |
+
+### Agentless Remote Acquisition (OpenSSH / WinRM)
+
+Directly acquire remote disks and memory without installing any agent on the target Windows system using native OpenSSH or WinRM.
+
+#### Supported Operations:
+- **Disk Listing:** Enumerates physical disks via `Get-CimInstance Win32_DiskDrive` or `wmic` formatted as JSON.
+- **Disk Acquisition:** Pipes raw binary streams from `\\.\PhysicalDrive[0-31]` directly over SSH into local working files.
+- **RAM Acquisition:** Streams memory dumps remotely via `winpmem.exe` pipe.
+- **Output Formats:** Bit-by-bit RAW (`.raw` / `.img`) or forensic AFF4 (`.aff4`).
+- **Live Hashing:** Generates SHA-256 and MD5 hashes simultaneously on the fly.
+
+#### CLI Commands:
+```bash
+amele ssh-disks <ip> <user> [port] [password] [key_path]
+amele ssh-tool-check <ip> <user> [port] [password] [key_path]
+amele ssh-image <ip> <user> <PhysicalDriveN> <out_dir> [case_name] [port] [password] [key_path] [raw|aff4]
+amele ssh-ram <ip> <user> <out_dir> [case_name] [port] [password] [key_path] [raw|aff4]
+```
 
 ### Output Folder Structure
 

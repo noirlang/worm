@@ -20,16 +20,18 @@ The app runs as a real desktop window on Linux and Windows.
 
 ## Features
 
-- **Local disk acquisition:** create raw disk images from local disks or image files.
-- **Remote disk acquisition:** collect disk images through the Linux and Windows agents.
+- **Local disk acquisition:** create raw disk images from local disks or image files with RAW or AFF4 output formatting.
+- **Remote disk acquisition (Agent):** collect disk images through the Amele Linux and Windows agents with live throughput and hashing.
+- **Agentless remote acquisition (SSH / WinRM):** acquire full remote physical disks and RAM over OpenSSH / WinRM directly without installing any agent on Linux or Windows targets.
 - **Local memory acquisition:** capture RAM with AVML on Linux and WinPMEM on Windows.
-- **Remote memory acquisition:** start, pause, resume, stop, track, and download RAM dumps from agents.
+- **Remote memory acquisition:** capture remote memory dumps via Agent or Agentless SSH streaming (`/proc/kcore`, AVML, WinPMEM).
+- **Output format flexibility:** choose between bit-by-bit RAW (`.raw` / `.img`) or forensically packaged AFF4 (`.aff4`) formats.
 - **Android tools:** check ADB, list devices, collect logical data, collect filesystem data, capture volatile data, and analyze Android case outputs.
 - **iOS tools:** normalize unencrypted or already decrypted iTunes/Finder backups into a browsable Backup2FS-style file system, with per-file MD5/SHA1/SHA256 CSV logging.
-- **Docker tools:** audit container escape risks, scan environment variables for exposed secrets/API keys, extract raw configs and logs, package runtime Overlay2 UpperDir drift layers, and stream remote container evidence via Linux Agent.
+- **Docker & Container DFIR:** audit container escape risks, scan environment variables for exposed secrets/API keys, extract raw configs and logs, package runtime Overlay2 UpperDir drift layers, and stream remote container evidence via Linux Agent.
 - **Online profiles:** connect an `amele.noirlang.tr` account, display synced roles such as BDFL or platform maintainer, and require verified membership for Android/iOS tools.
 - **Case management:** store acquisitions, notes, hashes, Android outputs, iOS outputs, reports, and `case_manifest.json` integrity inventories under selected cases.
-- **Hashing and verification:** calculate MD5, SHA1, SHA256, and SHA512; generate sidecar hashes for acquired evidence.
+- **Hashing and verification:** calculate MD5, SHA1, SHA256, and SHA512; generate sidecar hashes and verify file integrity on the fly.
 - **Image viewing:** mount supported images read-only for inspection.
 - **Reports:** create case reports from collected outputs, notes, and iOS backup metadata summaries.
 - **Updates:** check GitHub releases and download platform installers from inside the app.
@@ -193,12 +195,15 @@ Uygulama Linux ve Windows üzerinde gerçek bir masaüstü penceresi olarak çal
 
 ## Özellikler
 
-- **Yerel disk edinimi:** Yerel disklerden veya imaj dosyalarından ham (raw) disk imajları oluşturun.
-- **Uzak disk edinimi:** Linux ve Windows ajanları (agents) aracılığıyla uzak disk imajları toplayın.
+- **Yerel disk edinimi:** Yerel disklerden veya imaj dosyalarından RAW veya AFF4 formatında disk imajları oluşturun.
+- **Uzak disk edinimi (Ajan):** Linux ve Windows ajanları (agents) aracılığıyla canlı akış ve hash doğrulama ile uzak disk imajları toplayın.
+- **Agentsız uzak edinim (SSH / WinRM):** Hedef sisteme ajan kurmadan OpenSSH veya WinRM bağlantısıyla uzaktan fiziksel disk ve RAM edinimini doğrudan gerçekleştirin.
 - **Yerel bellek (RAM) edinimi:** Linux üzerinde AVML ve Windows üzerinde WinPMEM ile RAM bellek kopyasını alın.
-- **Uzak bellek (RAM) edinimi:** Ajanlar üzerinden RAM edinimini başlatın, duraklatın, sürdürün, durdurun, izleyin ve RAM dökümlerini indirin.
+- **Uzak bellek (RAM) edinimi:** Ajanlar veya agentsız SSH akışı (`/proc/kcore`, AVML, WinPMEM) üzerinden canlı RAM dökümü alın.
+- **Format esnekliği:** Ham bit-by-bit RAW (`.raw` / `.img`) veya adli paketli AFF4 (`.aff4`) edinim formatlarını seçin.
 - **Android araçları:** ADB durumunu kontrol edin, cihazları listeleyin, mantıksal veri toplayın, dosya sistemi verisi toplayın, uçucu (volatile) verileri alın ve Android vaka çıktılarını analiz edin.
 - **iOS araçları:** Şifresiz veya önceden decrypt edilmiş iTunes/Finder backup klasörlerini Backup2FS düzeninde gezilebilir dosya sistemine dönüştürün; her dosya için MD5/SHA1/SHA256 CSV log üretin.
+- **Docker ve Konteyner Adli Bilişimi:** Konteyner kaçış risklerini denetleyin, ortam değişkenlerindeki parola/token sızıntılarını tespit edin, runtime Overlay2 UpperDir drift katmanını arşivleyin ve canlı/uzak konteyner delillerini toplayın.
 - **Online profiller:** `amele.noirlang.tr` hesabını bağlayın, BDFL veya platform maintainer gibi rolleri profilde görün ve Android/iOS araçlarını doğrulanmış üyelikle kullanın.
 - **Vaka yönetimi:** Edinimleri, notları, hash değerlerini, Android/iOS çıktılarını, raporları ve `case_manifest.json` bütünlük envanterlerini seçilen vakalar altında saklayın.
 - **Hash hesaplama ve doğrulama:** MD5, SHA1, SHA256 ve SHA512 hesaplayın; elde edilen deliller için yan dosya (sidecar) hash dosyaları oluşturun.
@@ -304,6 +309,22 @@ cargo run -- ui-browser
 
 ## Komut Satırı Kullanımı (CLI)
 
+### Agentsız (SSH) Uzak Edinim
+```bash
+# Hedef Linux/Windows disklerini listele
+amele ssh-disks 192.168.1.100 root 22 parola123
+
+# RAM aracını ve bellek durumunu kontrol et
+amele ssh-tool-check 192.168.1.100 root 22 parola123
+
+# Uzak disk imajı al (Linux /dev/sda veya Windows PhysicalDrive0)
+amele ssh-image 192.168.1.100 root /dev/sda ./ciktilar vaka_adi 22 parola123 raw
+
+# Uzak RAM dökümü al (/proc/kcore, AVML veya WinPMEM)
+amele ssh-ram 192.168.1.100 root ./ciktilar vaka_adi 22 parola123 raw
+```
+
+### Docker Adli Bilişimi
 ```bash
 # Docker durumu, konteyner listesi ve loglar
 amele docker-status

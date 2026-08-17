@@ -80,6 +80,25 @@ Hedef Linux makineye `amele-linux` ajanı yerleştirilir ve TCP üzerinden JSON 
 | `ram_edinim_baslat` | AVML'yi uzaktan başlatır, RAM bellek dökümünü alır |
 | `ram_dosya_indir` | Alınan RAM dökümünü ağ üzerinden indirir |
 
+### Agentsız Uzak İmaj ve RAM Edinimi (SSH)
+
+Hedef Linux makineye hiçbir ajan kurmadan, standart SSH bağlantısı (parola, private key veya ssh-agent) üzerinden fiziksel disk ve RAM edinimini gerçekleştirir.
+
+#### Desteklenen İşlemler:
+- **Disk Tarama:** `lsblk -J` veya `/proc/partitions` ile hedef blok aygıtlarını JSON formatında listeler.
+- **Disk İmajı:** `dd` komutunu uzak kabukta çalıştırarak doğrudan binary stream olarak yerel sisteme çeker.
+- **RAM Edinimi:** AVML veya `/proc/kcore` üzerinden doğrudan RAM dökümünü akıtır.
+- **Format Desteği:** RAW (`.raw`) veya AFF4 (`.aff4`) olarak vaka klasörüne kaydeder.
+- **Canlı Hashleme:** İndirme esnasında eşzamanlı SHA-256 ve MD5 hash üretir.
+
+#### CLI Komutları:
+```bash
+amele ssh-disks <ip> <kullanici> [port] [parola] [anahtar_yolu]
+amele ssh-tool-check <ip> <kullanici> [port] [parola] [anahtar_yolu]
+amele ssh-image <ip> <kullanici> <disk_yolu> <cikti_klasoru> [vaka_adi] [port] [parola] [anahtar_yolu] [raw|aff4]
+amele ssh-ram <ip> <kullanici> <cikti_klasoru> [vaka_adi] [port] [parola] [anahtar_yolu] [raw|aff4]
+```
+
 ### Çıktı Klasör Yapısı
 
 ```
@@ -177,6 +196,25 @@ A `amele-linux` agent is deployed on the target Linux machine, communicating ove
 | `avml_kontrol` | Is AVML present on agent? Root privilege? RAM size? |
 | `ram_edinim_baslat` | Starts AVML remotely, captures RAM dump |
 | `ram_dosya_indir` | Downloads captured RAM dump over the network |
+
+### Agentless Remote Acquisition (SSH)
+
+Directly acquire remote disks and memory without installing any agent on the target Linux system using native SSH authentication (password, private key, or ssh-agent).
+
+#### Supported Operations:
+- **Disk Listing:** Enumerates block devices via `lsblk -J` or `/proc/partitions` formatted as JSON.
+- **Disk Acquisition:** Pipes remote `dd` binary stream over SSH directly into local working files.
+- **RAM Acquisition:** Streams memory dumps via AVML or `/proc/kcore`.
+- **Output Formats:** Bit-by-bit RAW (`.raw`) or forensic AFF4 (`.aff4`).
+- **Live Hashing:** Generates SHA-256 and MD5 hashes simultaneously on the fly.
+
+#### CLI Commands:
+```bash
+amele ssh-disks <ip> <user> [port] [password] [key_path]
+amele ssh-tool-check <ip> <user> [port] [password] [key_path]
+amele ssh-image <ip> <user> <disk_path> <out_dir> [case_name] [port] [password] [key_path] [raw|aff4]
+amele ssh-ram <ip> <user> <out_dir> [case_name] [port] [password] [key_path] [raw|aff4]
+```
 
 ### Output Folder Structure
 

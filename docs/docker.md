@@ -6,9 +6,9 @@
 
 ### Genel Bakış
 
-Amele Docker Adli Bilişim Modülü, Linux konteyner ortamlarında meydana gelen güvenlik ihlalleri, zararlı yazılım aktiviteleri ve konteyner kaçış (escape) girişimlerini analiz etmek için geliştirilmiş bütünleşik bir adli analiz ve edinim motorudur.
+Amele Docker Adli Bilişim Modülü, Linux ve Windows konteyner ortamlarında meydana gelen güvenlik ihlalleri, zararlı yazılım aktiviteleri ve konteyner kaçış (escape) girişimlerini analiz etmek için geliştirilmiş bütünleşik bir adli analiz ve edinim motorudur.
 
-Modül hem **yerel canlı sistem** veya **bağlanmış adli disk imajı** (`/var/lib/docker`) üzerinde hem de **Amele Linux Agent** üzerinden uzak sunucularda çalışabilir.
+Modül hem **yerel canlı sistem** (Linux `/var/lib/docker`, Windows `C:\ProgramData\Docker`), hem **bağlanmış adli disk imajı**, hem de **Amele Agent** üzerinden uzak sunucularda çalışabilir.
 
 ---
 
@@ -19,8 +19,8 @@ Modül hem **yerel canlı sistem** veya **bağlanmış adli disk imajı** (`/var
 | **Overlay2 UpperDir Drift Analizi** | Konteyner başlatıldıktan sonra dosya sisteminde sonradan oluşturulan, değiştirilen veya silinen tüm dosyaları (websheller, saldırgan binaryleri, konfigürasyon değişiklikleri) minimum boyutta `.tar.gz` olarak paketler. |
 | **Konteyner Kaçış Riski Değerlendirmesi** | `--privileged`, `/var/run/docker.sock` mountu, `hostPID`, `hostNetwork`, `hostIPC` ad alanları, tehlikeli Linux yetkileri (`SYS_ADMIN`, `SYS_PTRACE`, `NET_ADMIN`) ve `AppArmor/Seccomp: unconfined` durumlarını denetleyerek `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` risk puanı üretir. |
 | **Ortam Değişkeni / Secret Tespiti** | Konteyner konfigürasyonundaki (ENV) parola, veritabanı şifresi, API anahtarı, AWS tokenı ve JWT kalıplarını regex ile tespit eder. |
-| **Ham Konfigürasyon ve Loglar** | `config.v2.json`, `hostconfig.json` ve `<id>-json.log` dosyalarını adli vaka klasörüne toplar. |
-| **Uzak Docker Edinimi** | Linux Agent ile güvenli TCP soketi üzerinden fiziksel erişim olmadan uzak Docker sunucularını inceler ve delil paketini canlı SHA-256 doğrulamasıyla istemciye aktarır. |
+| **Ham Konfigürasyon ve Loglar** | `config.v2.json`, `hostconfig.json` ve `<id>-json.log` dosyalarını adli vaka klasörüne toplar. Kısa (12 karakter) ID veya tam ID eşleştirmesini destekler. |
+| **Çapraz Platform ve Uzak Destek** | Linux soketi (`/var/run/docker.sock`) ve Windows named pipe (`\\.\pipe\docker_engine`) desteği ile hem yerel hem de Agent üzerinden uzak Docker sunucularını inceler. |
 | **Profil ve Vaka Entegrasyonu** | Toplanan deliller aktif vaka klasörüne kaydedilir ve Profil > Vaka Geçmişi (Acquisition History) ekranında otomatik listelenir. |
 
 ---
@@ -102,9 +102,9 @@ amele docker-remote-acquire <ip> <port> <container_id> [vaka_adi] [token]
 
 ### Overview
 
-The Amele Docker Forensic Module is an integrated digital forensics and evidence acquisition engine designed to investigate security breaches, container drift, malware persistence, and container escape attempts in Linux container environments.
+The Amele Docker Forensic Module is an integrated digital forensics and evidence acquisition engine designed to investigate security breaches, container drift, malware persistence, and container escape attempts in Linux and Windows container environments.
 
-The module operates both in **local live system / mounted disk image** mode (`/var/lib/docker`) and in **remote agent** mode via the Amele Linux Agent.
+The module operates in **local live system** (Linux `/var/lib/docker`, Windows `C:\ProgramData\Docker`), **mounted disk image**, and **remote agent** modes.
 
 ---
 
@@ -115,8 +115,8 @@ The module operates both in **local live system / mounted disk image** mode (`/v
 | **Overlay2 UpperDir Drift Forensics** | Packages the container's runtime modification layer (dropped webshells, attacker binaries, altered configs) into a minimal `.tar.gz` archive. |
 | **Container Escape Risk Engine** | Audits `--privileged` mode, `/var/run/docker.sock` mounts, `hostPID`/`hostNetwork`/`hostIPC` namespaces, dangerous Linux capabilities (`SYS_ADMIN`, `SYS_PTRACE`, `NET_ADMIN`), and `AppArmor/Seccomp: unconfined` profiles to assign `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` breakout risk ratings. |
 | **Secret & Token Scanner** | Automatically inspects container environment variables (ENV) using regex patterns to uncover exposed database credentials, API keys, AWS secrets, and JWT tokens. |
-| **Raw Configs & Logs Extraction** | Extracts `config.v2.json`, `hostconfig.json`, and `<id>-json.log` into the case repository. |
-| **Remote Docker Acquisition** | Inspects remote Docker daemons over secure TCP agent connection and streams container evidence with live SHA-256 verification. |
+| **Raw Configs & Logs Extraction** | Extracts `config.v2.json`, `hostconfig.json`, and `<id>-json.log` into the case repository. Supports 12-char short ID or full ID resolution. |
+| **Cross-Platform & Remote Acquisition** | Supports Linux domain sockets (`/var/run/docker.sock`), Windows named pipes (`\\.\pipe\docker_engine`), and TCP agent connections with live SHA-256 verification. |
 | **Profile & Case Vault Integration** | Acquired evidence is archived in the active case vault and automatically indexed in Profile > Acquisition History. |
 
 ---
