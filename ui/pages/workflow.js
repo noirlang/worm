@@ -17,28 +17,19 @@ export function workflowPage({ id, workflows, state, t, icon, localText, canonic
 
   const isWindows = data.platform === "Windows";
   const defaultUser = isWindows ? "Administrator" : "root";
-  const sshCliCmd = isWindows
-    ? (isRam
-        ? `ssh Administrator@<IP> -p <port> "winpmem.exe -" \\\n  | dd of=./remote_win_ram.aff4`
-        : `ssh Administrator@<IP> -p <port> "dd.exe if=\\\\.\\PhysicalDrive0 bs=4M" \\\n  | dd of=./remote_win_disk.img`)
-    : (isRam
-        ? `ssh <user>@<IP> -p <port> "sudo avml /dev/stdout" \\\n  | dd of=./remote_ram.lime`
-        : `ssh <user>@<IP> -p <port> "sudo dd if=/dev/<disk> bs=4M status=progress" \\\n  | dd of=./remote_disk.img`);
+  const defaultPort = isWindows ? "22" : "22";
 
   const connectionBlock = isSsh
     ? `
         <p class="section-label">${t("workflow.sshConnection")}</p>
         ${field(t("workflow.ip"), `<input class="input" data-field="ip" placeholder="192.168.1.100" value="" />`)}
-        ${field(t("workflow.port"), `<input class="input" data-field="port" value="22" />`)}
+        ${field(t("workflow.port"), `<input class="input" data-field="port" value="${defaultPort}" />`)}
         ${field(t("workflow.sshUser"), `<input class="input" data-field="ssh-user" placeholder="${defaultUser}" />`)}
         ${field(t("workflow.sshPass"), `<input class="input" type="password" data-field="ssh-pass" placeholder="${t("workflow.sshPassPlaceholder")}" />`)}
         ${pickerField(t("workflow.sshKey"), "ssh-key-file", t("workflow.sshKeyPlaceholder"), "file", icon, t)}
         <div class="button-row">
           <button class="primary-button" data-action="connect">${icon("key")} ${t("workflow.sshConnect")}</button>
         </div>
-        <div class="section-divider"></div>
-        <p class="section-label">${t("workflow.cliPreview")}</p>
-        <div class="code-box ssh-cli-preview" id="ssh-cli-preview">${sshCliCmd}</div>
       `
     : `
         <p class="section-label">${t("workflow.connectionOps")}</p>
