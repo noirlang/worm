@@ -1489,6 +1489,122 @@ button {
   font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
   font-size: 13px;
   overflow: auto;
+  white-space: pre;
+}
+
+.agent-mode-banner {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.agent-mode-card {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--panel);
+}
+
+.agent-mode-with {
+  border-color: rgba(101, 229, 138, 0.25);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(101, 229, 138, 0.12), transparent 50%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--panel);
+}
+
+.agent-mode-without {
+  border-color: rgba(100, 180, 255, 0.2);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(100, 180, 255, 0.08), transparent 50%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--panel);
+}
+
+.agent-mode-card h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.agent-mode-card p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.agent-feature-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-feature-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.agent-feature-list svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--green);
+}
+
+.agentless-card {
+  position: relative;
+}
+
+.agentless-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.agentless-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(100, 180, 255, 0.08);
+  color: #64b4ff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agentless-meta {
+  display: flex;
+  gap: 14px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.agentless-meta span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agentless-meta svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 code {
