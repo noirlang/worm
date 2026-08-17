@@ -142,6 +142,7 @@ jobs:
     name: AppImage, DEB, RPM and Arch
     needs:
       - metadata
+      - release-init
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -176,17 +177,14 @@ jobs:
           cp dist/amele-linux-x64.pkg.tar.zst \
             "release-assets/amele-x64-${ASSET_SUFFIX}.pkg.tar.zst"
 
-      - name: Upload Linux packages to release
+      - name: Upload Linux artifacts
         if: github.actor != 'nektos/act'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh release upload "$RELEASE_TAG" release-assets/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
 
   windows-msi:
     name: Windows GUI and MSI
@@ -269,34 +267,34 @@ jobs:
           Copy-Item dist\amele-windows-x64.msi `
             "release-assets\amele-x64-$env:ASSET_SUFFIX.msi"
 
-      - name: Upload Windows MSI to release
+      - name: Upload Windows artifacts
         if: github.actor != 'nektos/act'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
-        shell: pwsh
-        run: |
-          $Asset = Get-ChildItem release-assets -File -Filter "*.msi" | Select-Object -First 1
-          if ($null -eq $Asset) {
-            throw "No Windows MSI release asset found"
-          }
-          $AssetPath = Join-Path "release-assets" $Asset.Name
-          gh release upload $env:RELEASE_TAG $AssetPath `
-            --repo $env:GITHUB_REPOSITORY `
-            --clobber
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
 
   release:
     name: Finalize commit prerelease
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.actor != 'nektos/act'
     needs:
       - metadata
+      - release-init
       - linux-packages
       - windows-msi
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Download release assets and create checksums
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create checksums and upload packages
         env:
           GH_TOKEN: ${{ github.token }}
           ASSET_SUFFIX: ${{ needs.metadata.outputs.asset_suffix }}
@@ -304,26 +302,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p release-assets
-          gh release download "$RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --dir release-assets \
-            --pattern 'amele-x64-*'
-
           cd release-assets
           find . -name '*SHA256SUMS.txt' -delete
-          sha256sum amele-x64-* \
-            > "amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt"
-
-      - name: Upload checksums
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
-          ASSET_SUFFIX: ${{ needs.metadata.outputs.asset_suffix }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh release upload "$RELEASE_TAG" \
-            "release-assets/amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt" \
+          sha256sum amele-x64-* > "amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt"
+          gh release upload "$RELEASE_TAG" * \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
