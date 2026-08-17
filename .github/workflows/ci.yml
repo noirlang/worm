@@ -318,12 +318,27 @@ jobs:
           cat "amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt"
           
           echo "=== Uploading to Release ${RELEASE_TAG} ==="
+          upload_with_retry() {
+            local file="$1"
+            local max_attempts=5
+            local delay=5
+            for ((attempt=1; attempt<=max_attempts; attempt++)); do
+              echo "Uploading $file (attempt $attempt/$max_attempts)..."
+              if gh release upload "$RELEASE_TAG" "$file" --repo "$GITHUB_REPOSITORY" --clobber; then
+                echo "Successfully uploaded $file"
+                return 0
+              fi
+              echo "Upload attempt $attempt failed for $file. Retrying in ${delay}s..."
+              sleep "$delay"
+              delay=$((delay * 2))
+            done
+            echo "ERROR: Failed to upload $file after $max_attempts attempts." >&2
+            return 1
+          }
+
           for file in *; do
             if [[ -f "$file" ]]; then
-              echo "Uploading $file..."
-              gh release upload "$RELEASE_TAG" "$file" \
-                --repo "$GITHUB_REPOSITORY" \
-                --clobber
+              upload_with_retry "$file"
             fi
           done
           
