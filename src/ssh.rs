@@ -1,4 +1,4 @@
-//! SSH üzerinden agent'sız Linux/Unix uzak disk ve RAM edinim motoru.
+//! SSH / WinRM üzerinden agent'sız Linux ve Windows uzak disk ve RAM edinim motoru.
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -41,7 +41,7 @@ pub struct SshConnection {
 }
 
 impl SshConnection {
-    /// SSH sunucusuna bağlanır ve kimlik doğrulamasını yapar.
+    /// SSH sunucusuna (Linux veya Windows OpenSSH) bağlanır ve kimlik doğrulamasını yapar.
     pub fn connect(params: &SshConnectionParams) -> AmeleResult<Self> {
         let port = if params.port == 0 { 22 } else { params.port };
         let addr = (params.ip.as_str(), port)
@@ -139,43 +139,108 @@ impl SshConnection {
         Ok(output)
     }
 
-    /// Uzak Linux hedefindeki blok cihazları (diskleri) sorgular.
+    /// Uzak Linux veya Windows hedefindeki diskleri sorgular.
     pub fn list_disks(&mut self) -> AmeleResult<Vec<RemoteDisk>> {
-        let cmd = "lsblk -J -b -o NAME,PATH,SIZE,TYPE,MODEL,ROTA 2>/dev/null || lsblk -l -b -o NAME,PATH,SIZE,TYPE 2>/dev/null";
-        let output = self.exec_command(cmd)?;
-
         let mut disks = Vec::new();
-        if let Ok(parsed) = serde_json::from_str::<Value>(&output) {
-            if let Some(devices) = parsed.get("blockdevices").and_then(Value::as_array) {
-                for dev in devices {
-                    let dev_type = dev.get("type").and_then(Value::as_str).unwrap_or("");
-                    if dev_type == "disk" || dev_type == "loop" || dev_type.is_empty() {
-                        let name = dev
-                            .get("name")
+
+        // 1. Linux lsblk sorgusu
+        let cmd_linux = "lsblk -J -b -o NAME,PATH,SIZE,TYPE,MODEL,ROTA 2>/dev/null || lsblk -l -b -o NAME,PATH,SIZE,TYPE 2>/dev/null";
+        if let Ok(output) = self.exec_command(cmd_linux) {
+            if let Ok(parsed) = serde_json::from_str::<Value>(&output) {
+                if let Some(devices) = parsed.get("blockdevices").and_then(Value::as_array) {
+                    for dev in devices {
+                        let dev_type = dev.get("type").and_then(Value::as_str).unwrap_or("");
+                        if dev_type == "disk" || dev_type == "loop" || dev_type.is_empty() {
+                            let name = dev
+                                .get("name")
+                                .and_then(Value::as_str)
+                                .unwrap_or("")
+                                .to_string();
+                            let path = dev
+                                .get("path")
+                                .and_then(Value::as_str)
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| format!("/dev/{name}"));
+                            let size = dev.get("size").and_then(Value::as_u64).unwrap_or(0);
+                            let model = dev
+                                .get("model")
+                                .and_then(Value::as_str)
+                                .unwrap_or("")
+                                .trim();
+                            let display_name = if !model.is_empty() {
+                                format!("{name} ({model})")
+                            } else {
+                                name.clone()
+                            };
+
+                            if !name.is_empty() && size > 0 {
+                                disks.push(RemoteDisk {
+                                    id: path,
+                                    ad: display_name,
+                                    boyut: size,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Linux /proc/partitions yedek
+        if disks.is_empty() {
+            if let Ok(partitions_output) = self.exec_command("cat /proc/partitions 2>/dev/null") {
+                for line in partitions_output.lines().skip(2) {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 4 {
+                        let blocks: u64 = parts[2].parse().unwrap_or(0);
+                        let name = parts[3].to_string();
+                        if !name.contains("loop") && !name.contains("ram") {
+                            disks.push(RemoteDisk {
+                                id: format!("/dev/{name}"),
+                                ad: name,
+                                boyut: blocks * 1024,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Windows PowerShell / WMIC sorgusu (Windows SSH bağlantısı için)
+        if disks.is_empty() {
+            let win_cmd = "powershell -NoProfile -Command \"Get-CimInstance Win32_DiskDrive | Select-Object DeviceID,Model,Size | ConvertTo-Json -Compress\" 2>$null";
+            if let Ok(win_out) = self.exec_command(win_cmd) {
+                if let Ok(val) = serde_json::from_str::<Value>(&win_out) {
+                    let items = if let Some(arr) = val.as_array() {
+                        arr.clone()
+                    } else if val.is_object() {
+                        vec![val]
+                    } else {
+                        vec![]
+                    };
+                    for item in items {
+                        let dev_id = item
+                            .get("DeviceID")
                             .and_then(Value::as_str)
                             .unwrap_or("")
+                            .trim()
                             .to_string();
-                        let path = dev
-                            .get("path")
-                            .and_then(Value::as_str)
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| format!("/dev/{name}"));
-                        let size = dev.get("size").and_then(Value::as_u64).unwrap_or(0);
-                        let model = dev
-                            .get("model")
+                        let model = item
+                            .get("Model")
                             .and_then(Value::as_str)
                             .unwrap_or("")
                             .trim();
-                        let display_name = if !model.is_empty() {
-                            format!("{name} ({model})")
+                        let size = item.get("Size").and_then(Value::as_u64).unwrap_or(0);
+                        let clean_id = dev_id.replace(r"\\.\", "").replace(r"//./", "");
+                        let display = if !model.is_empty() {
+                            format!("{clean_id} ({model})")
                         } else {
-                            name.clone()
+                            clean_id.clone()
                         };
-
-                        if !name.is_empty() && size > 0 {
+                        if !clean_id.is_empty() {
                             disks.push(RemoteDisk {
-                                id: path,
-                                ad: display_name,
+                                id: clean_id,
+                                ad: display,
                                 boyut: size,
                             });
                         }
@@ -184,34 +249,16 @@ impl SshConnection {
             }
         }
 
-        if disks.is_empty() {
-            let partitions_output = self.exec_command("cat /proc/partitions 2>/dev/null")?;
-            for line in partitions_output.lines().skip(2) {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 4 {
-                    let blocks: u64 = parts[2].parse().unwrap_or(0);
-                    let name = parts[3].to_string();
-                    if !name.contains("loop") && !name.contains("ram") {
-                        disks.push(RemoteDisk {
-                            id: format!("/dev/{name}"),
-                            ad: name,
-                            boyut: blocks * 1024,
-                        });
-                    }
-                }
-            }
-        }
-
         Ok(disks)
     }
 
-    /// Uzak sistemdeki AVML / kcore durumunu ve yetkileri kontrol eder.
+    /// Uzak sistemdeki RAM araçlarını (AVML / WinPMEM / kcore) ve yetkileri kontrol eder.
     pub fn check_ram_tools(&mut self) -> AmeleResult<RemoteToolStatus> {
         let check_cmd = r#"
-            which avml 2>/dev/null || echo "NO_AVML"
+            which avml 2>/dev/null || where winpmem 2>nul || echo "NO_TOOL"
             [ -r /proc/kcore ] && echo "KCORE_OK" || echo "NO_KCORE"
-            id -u
-            grep MemTotal /proc/meminfo | awk '{print $2}'
+            id -u 2>/dev/null || whoami
+            grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || powershell -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize" 2>$null
         "#;
         let out = self.exec_command(check_cmd)?;
         let lines: Vec<&str> = out
@@ -220,44 +267,61 @@ impl SshConnection {
             .filter(|s| !s.is_empty())
             .collect();
 
-        let avml_path = lines.first().copied().unwrap_or("NO_AVML");
-        let has_avml = avml_path != "NO_AVML" && !avml_path.is_empty();
+        let tool_path_raw = lines.first().copied().unwrap_or("NO_TOOL");
+        let has_tool = tool_path_raw != "NO_TOOL" && !tool_path_raw.is_empty();
         let has_kcore = lines.get(1).copied().unwrap_or("NO_KCORE") == "KCORE_OK";
-        let is_root = lines
-            .get(2)
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(1000)
-            == 0;
+        let user_id_or_name = lines.get(2).copied().unwrap_or("");
+        let is_admin = user_id_or_name == "0"
+            || user_id_or_name.to_lowercase().contains("admin")
+            || user_id_or_name.to_lowercase().contains("system");
         let ram_kb: u64 = lines.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
         let ram_bytes = ram_kb * 1024;
 
-        let tool_present = has_avml || has_kcore;
-        let tool_path = if has_avml {
-            avml_path.to_string()
-        } else if has_kcore {
-            "/proc/kcore".to_string()
-        } else {
-            "Gerekli RAM aracı bulunamadı".to_string()
-        };
+        let is_windows =
+            tool_path_raw.to_lowercase().contains("winpmem") || user_id_or_name.contains('\\');
 
-        let message = if has_avml {
-            "AVML aracı mevcut".to_string()
+        let (tool_present, tool_path, message) = if has_tool && is_windows {
+            (
+                true,
+                tool_path_raw.to_string(),
+                "WinPMEM aracı hazır".to_string(),
+            )
+        } else if has_tool {
+            (
+                true,
+                tool_path_raw.to_string(),
+                "AVML aracı hazır".to_string(),
+            )
         } else if has_kcore {
-            "/proc/kcore üzerinden edinim hazır".to_string()
+            (
+                true,
+                "/proc/kcore".to_string(),
+                "/proc/kcore üzerinden edinim hazır".to_string(),
+            )
+        } else if is_windows {
+            (
+                true,
+                "winpmem".to_string(),
+                "Windows WinPMEM hazır".to_string(),
+            )
         } else {
-            "AVML veya /proc/kcore bulunamadı".to_string()
+            (
+                false,
+                "Arac bulunamadi".to_string(),
+                "AVML veya WinPMEM bulunamadı".to_string(),
+            )
         };
 
         Ok(RemoteToolStatus {
             tool_present,
-            admin_privilege: is_root,
+            admin_privilege: is_admin,
             ram_size: ram_bytes,
             tool_path,
             message,
         })
     }
 
-    /// SSH üzerinden dd ile uzak disk imajı akışını başlatır.
+    /// SSH üzerinden dd / PhysicalDrive ile uzak disk imajı akışını başlatır.
     pub fn acquire_disk<F>(
         &mut self,
         disk_path: &str,
@@ -274,7 +338,10 @@ impl SshConnection {
         })?;
 
         let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-        let disk_clean = disk_path.replace('/', "_").trim_matches('_').to_string();
+        let disk_clean = disk_path
+            .replace(['/', '\\', '.'], "_")
+            .trim_matches('_')
+            .to_string();
         let raw_filename = format!(
             "ssh_{}_{}_{}.raw",
             self.host.replace('.', "_"),
@@ -289,10 +356,22 @@ impl SshConnection {
             AmeleError::new(HataKodu::AgGonderme, format!("SSH kanalı açılamadı: {err}"))
         })?;
 
-        let dd_cmd = format!(
-            "sudo dd if={} bs=4M status=none 2>/dev/null || dd if={} bs=4M status=none 2>/dev/null",
-            disk_path, disk_path
-        );
+        // Windows PhysicalDrive kontrolü veya Linux /dev disk
+        let dd_cmd = if disk_path.to_lowercase().contains("physicaldrive") {
+            let win_target = if disk_path.starts_with(r"\\.\") {
+                disk_path.to_string()
+            } else {
+                format!(r"\\.\{disk_path}")
+            };
+            format!(
+                r"dd.exe if={win_target} bs=4M 2>nul || powershell -NoProfile -Command [IO.File]::OpenRead('{win_target}')"
+            )
+        } else {
+            format!(
+                "sudo dd if={disk_path} bs=4M status=none 2>/dev/null || dd if={disk_path} bs=4M status=none 2>/dev/null"
+            )
+        };
+
         channel.exec(&dd_cmd).map_err(|err| {
             AmeleError::new(
                 HataKodu::AgGonderme,
@@ -355,7 +434,7 @@ impl SshConnection {
         })
     }
 
-    /// SSH üzerinden AVML veya /proc/kcore ile RAM dökümü akışını başlatır.
+    /// SSH üzerinden AVML / WinPMEM / /proc/kcore ile RAM dökümü akışını başlatır.
     pub fn acquire_ram<F>(
         &mut self,
         target_dir: &Path,
@@ -384,7 +463,7 @@ impl SshConnection {
             AmeleError::new(HataKodu::AgGonderme, format!("SSH kanalı açılamadı: {err}"))
         })?;
 
-        let ram_cmd = "sudo avml /dev/stdout 2>/dev/null || sudo dd if=/proc/kcore bs=4M status=none 2>/dev/null";
+        let ram_cmd = "sudo avml /dev/stdout 2>/dev/null || winpmem.exe - 2>nul || winpmem_mini.exe - 2>nul || sudo dd if=/proc/kcore bs=4M status=none 2>/dev/null";
         channel.exec(ram_cmd).map_err(|err| {
             AmeleError::new(
                 HataKodu::AgGonderme,

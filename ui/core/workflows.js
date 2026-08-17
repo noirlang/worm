@@ -42,6 +42,22 @@ export const toolCards = {
       icon: "chip",
       accent: "var(--text)",
       badge: L("Yönetici gerekli", "Admin required")
+    },
+    {
+      id: "windows-ssh-disk",
+      title: L("SSH/WinRM ile Uzak Disk (Agent'sız)", "SSH/WinRM Remote Disk (Agentless)"),
+      desc: L("Windows OpenSSH veya WinRM bağlantısıyla agent kurmadan PhysicalDrive imajı alın.", "Acquire PhysicalDrive image from remote Windows via OpenSSH/WinRM without an agent."),
+      icon: "key",
+      accent: "var(--text)",
+      badge: "SSH · PhysicalDrive"
+    },
+    {
+      id: "windows-ssh-ram",
+      title: L("SSH/WinRM ile Uzak RAM (Agent'sız)", "SSH/WinRM Remote RAM (Agentless)"),
+      desc: L("Windows OpenSSH üzerinden WinPMEM ile agent kurmadan RAM dökümü alın.", "Acquire remote Windows RAM via OpenSSH with WinPMEM without an agent."),
+      icon: "ram",
+      accent: "var(--text)",
+      badge: "SSH · WinPMEM pipe"
     }
   ],
   linux: [
@@ -183,5 +199,22 @@ export const workflows = {
     desc: L("Hedef IP, port ve kullanıcı adıyla SSH bağlan; AVML pipe ile RAM alınır.", "SSH into the target with IP, port and username; RAM is dumped via AVML pipe."),
     mode: "ssh-ram",
     output: "/home/raodrin/Amele/Ciktilar"
+  },
+  "windows-ssh-disk": {
+    platform: "Windows",
+    icon: "key",
+    title: L("SSH / WinRM ile Agent'sız Windows Disk", "Agentless Windows Disk via SSH / WinRM"),
+    desc: L("Hedef IP, port, kullanıcı adı ve disk seçin; PhysicalDrive imajı alınır.", "Enter target IP, port, username and disk; PhysicalDrive image is acquired."),
+    mode: "ssh-disk",
+    output: "C:\\Amele\\Ciktilar",
+    diskLabel: L("Disk seçilmedi", "No disk selected")
+  },
+  "windows-ssh-ram": {
+    platform: "Windows",
+    icon: "ram",
+    title: L("SSH / WinRM ile Agent'sız Windows RAM", "Agentless Windows RAM via SSH / WinRM"),
+    desc: L("Hedef IP, port ve kullanıcı adıyla bağlanın; WinPMEM ile RAM dump alınır.", "Connect with target IP, port and username; RAM dump is acquired with WinPMEM."),
+    mode: "ssh-ram",
+    output: "C:\\Amele\\Ciktilar"
   }
 };
