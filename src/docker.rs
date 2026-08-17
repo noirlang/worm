@@ -838,19 +838,39 @@ pub fn get_container_logs(
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| PathBuf::from(DEFAULT_DOCKER_ROOT));
 
-    let log_file = root_path
-        .join("containers")
-        .join(container_id)
-        .join(format!("{}-json.log", container_id));
+    let containers_dir = root_path.join("containers");
+    let target_dir = if containers_dir.join(container_id).is_dir() {
+        Some(containers_dir.join(container_id))
+    } else if let Ok(entries) = fs::read_dir(&containers_dir) {
+        entries
+            .flatten()
+            .find(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(|name| name.starts_with(container_id))
+                    .unwrap_or(false)
+            })
+            .map(|e| e.path())
+    } else {
+        None
+    };
 
     let mut logs = Vec::new();
 
-    if log_file.exists() {
-        if let Ok(file) = File::open(&log_file) {
-            let reader = BufReader::new(file);
-            for line in reader.lines().flatten() {
-                if let Ok(val) = serde_json::from_str::<Value>(&line) {
-                    logs.push(val);
+    if let Some(dir) = target_dir {
+        let full_id = dir
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or(container_id);
+        let log_file = dir.join(format!("{}-json.log", full_id));
+
+        if log_file.exists() {
+            if let Ok(file) = File::open(&log_file) {
+                let reader = BufReader::new(file);
+                for line in reader.lines().flatten() {
+                    if let Ok(val) = serde_json::from_str::<Value>(&line) {
+                        logs.push(val);
+                    }
                 }
             }
         }
@@ -884,10 +904,11 @@ pub fn get_container_logs(
     }
 
     if tail > 0 && logs.len() > tail {
-        Ok(logs.split_off(logs.len() - tail))
-    } else {
-        Ok(logs)
+        let start = logs.len() - tail;
+        logs = logs[start..].to_vec();
     }
+
+    Ok(logs)
 }
 
 /// Konteyner delillerini (Overlay2 diff, konfigürasyon, loglar ve metadata) vaka klasörüne toplar.
@@ -905,7 +926,24 @@ where
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_DOCKER_ROOT));
 
-    let container_dir = root_path.join("containers").join(&req.container_id);
+    let containers_dir = root_path.join("containers");
+    let container_dir = if containers_dir.join(&req.container_id).is_dir() {
+        containers_dir.join(&req.container_id)
+    } else if let Ok(entries) = fs::read_dir(&containers_dir) {
+        entries
+            .flatten()
+            .find(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(|name| name.starts_with(&req.container_id))
+                    .unwrap_or(false)
+            })
+            .map(|e| e.path())
+            .unwrap_or_else(|| containers_dir.join(&req.container_id))
+    } else {
+        containers_dir.join(&req.container_id)
+    };
+
     let config_path = container_dir.join("config.v2.json");
     let hostconfig_path = container_dir.join("hostconfig.json");
 
@@ -1044,12 +1082,31 @@ where
     let mut logs_saved = false;
     if req.acquire_logs {
         progress_callback("Konteyner günlükleri kopyalanıyor...", 40, 100);
-        let log_file = container_dir.join(format!("{}-json.log", req.container_id));
-        if log_file.exists() {
-            let dest = target_case_dir.join("container.log");
-            if fs::copy(&log_file, &dest).is_ok() {
-                files_acquired.push("container.log".to_string());
-                logs_saved = true;
+        let actual_cid = container_dir
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or(&req.container_id);
+        let log_candidate = if container_dir
+            .join(format!("{}-json.log", actual_cid))
+            .exists()
+        {
+            Some(container_dir.join(format!("{}-json.log", actual_cid)))
+        } else if let Ok(entries) = fs::read_dir(&container_dir) {
+            entries
+                .flatten()
+                .find(|e| e.file_name().to_string_lossy().ends_with("-json.log"))
+                .map(|e| e.path())
+        } else {
+            None
+        };
+
+        if let Some(log_file) = log_candidate {
+            if log_file.exists() {
+                let dest = target_case_dir.join("container.log");
+                if fs::copy(&log_file, &dest).is_ok() {
+                    files_acquired.push("container.log".to_string());
+                    logs_saved = true;
+                }
             }
         }
         if !logs_saved && req.custom_docker_root.is_none() {
