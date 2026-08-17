@@ -78,13 +78,20 @@ export const toolCards = {
       badge: L("Root gerekli", "Root required")
     },
     {
-      id: "docker-tools",
-      route: "docker",
-      title: L("Docker Konteyner Adli Bilişimi", "Docker Container Forensics"),
-      desc: L("Overlay2 drift katmanı, konfigürasyon, log ve kaçış riski analizi.", "Overlay2 drift layer, config, logs and escape risk analysis."),
-      icon: "docker",
+      id: "linux-ssh-disk",
+      title: L("SSH ile Uzak Disk (Agent'sız)", "SSH Remote Disk (Agentless)"),
+      desc: L("Hedef Linux sisteme SSH bağlantısıyla agent kurmadan disk imajı alın.", "Acquire a disk image from a remote Linux host via SSH without any agent."),
+      icon: "key",
       accent: "var(--text)",
-      badge: "Overlay2 + DFIR"
+      badge: "SSH · dd pipe"
+    },
+    {
+      id: "linux-ssh-ram",
+      title: L("SSH ile Uzak RAM (Agent'sız)", "SSH Remote RAM (Agentless)"),
+      desc: L("Hedef Linux sisteme SSH ile bağlanıp AVML veya /proc/kcore ile RAM dökümü alın.", "Dump remote Linux RAM via SSH using AVML or /proc/kcore without an agent."),
+      icon: "ram",
+      accent: "var(--text)",
+      badge: "SSH · AVML pipe"
     }
   ]
 };
@@ -159,5 +166,22 @@ export const workflows = {
     desc: L("AVML kontrolü ve root ile RAM imajı.", "Check AVML and acquire RAM as root."),
     mode: "local-ram",
     output: "linux_memory_dump.raw"
+  },
+  "linux-ssh-disk": {
+    platform: "Linux",
+    icon: "key",
+    title: L("SSH ile Agent'sız Linux Disk", "Agentless Linux Disk via SSH"),
+    desc: L("Hedef IP, port, kullanıcı adı ve disk seçin; dd pipe ile imaj alınır.", "Enter target IP, port, username and disk; image is acquired via dd pipe."),
+    mode: "ssh-disk",
+    output: "/home/raodrin/Amele/Ciktilar",
+    diskLabel: L("Disk seçilmedi", "No disk selected")
+  },
+  "linux-ssh-ram": {
+    platform: "Linux",
+    icon: "ram",
+    title: L("SSH ile Agent'sız Linux RAM", "Agentless Linux RAM via SSH"),
+    desc: L("Hedef IP, port ve kullanıcı adıyla SSH bağlan; AVML pipe ile RAM alınır.", "SSH into the target with IP, port and username; RAM is dumped via AVML pipe."),
+    mode: "ssh-ram",
+    output: "/home/raodrin/Amele/Ciktilar"
   }
 };
