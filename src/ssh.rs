@@ -364,11 +364,11 @@ impl SshConnection {
                 format!(r"\\.\{disk_path}")
             };
             format!(
-                r"dd.exe if={win_target} bs=4M 2>nul || powershell -NoProfile -Command [IO.File]::OpenRead('{win_target}')"
+                r#"dd.exe if="{win_target}" bs=4M 2>/dev/null || dd.exe if="{win_target}" bs=4M || dd if="{disk_path}" bs=4M status=none 2>/dev/null || sudo dd if="{disk_path}" bs=4M status=none 2>/dev/null"#
             )
         } else {
             format!(
-                "sudo dd if={disk_path} bs=4M status=none 2>/dev/null || dd if={disk_path} bs=4M status=none 2>/dev/null"
+                r#"sudo dd if="{disk_path}" bs=4M status=none 2>/dev/null || dd if="{disk_path}" bs=4M status=none 2>/dev/null || dd.exe if="{disk_path}" bs=4M"#
             )
         };
 
@@ -463,7 +463,7 @@ impl SshConnection {
             AmeleError::new(HataKodu::AgGonderme, format!("SSH kanalı açılamadı: {err}"))
         })?;
 
-        let ram_cmd = "sudo avml /dev/stdout 2>/dev/null || winpmem.exe - 2>nul || winpmem_mini.exe - 2>nul || sudo dd if=/proc/kcore bs=4M status=none 2>/dev/null";
+        let ram_cmd = "winpmem.exe - 2>/dev/null || winpmem.exe - || sudo avml /dev/stdout 2>/dev/null || avml /dev/stdout 2>/dev/null || sudo dd if=/proc/kcore bs=4M status=none 2>/dev/null";
         channel.exec(ram_cmd).map_err(|err| {
             AmeleError::new(
                 HataKodu::AgGonderme,
