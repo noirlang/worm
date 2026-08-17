@@ -25,6 +25,10 @@ use std::path::{Path, PathBuf};
 use tar::Builder;
 
 /// Varsayılan Docker kök dizini yolu
+#[cfg(target_os = "windows")]
+pub const DEFAULT_DOCKER_ROOT: &str = r"C:\ProgramData\Docker";
+
+#[cfg(not(target_os = "windows"))]
 pub const DEFAULT_DOCKER_ROOT: &str = "/var/lib/docker";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,9 +155,17 @@ pub fn check_docker_status(custom_root: Option<&Path>) -> DockerSystemStatus {
 
     let is_available = containers_exist || overlay_exist;
 
-    // Canlı sistemde socket kontrolü
+    // Canlı sistemde socket / named pipe kontrolü
     let socket_running = if !is_custom {
-        Path::new("/var/run/docker.sock").exists()
+        #[cfg(target_os = "windows")]
+        {
+            Path::new(r"\\.\pipe\docker_engine").exists()
+                || Path::new(r"C:\ProgramData\Docker\docker.pid").exists()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Path::new("/var/run/docker.sock").exists()
+        }
     } else {
         false
     };

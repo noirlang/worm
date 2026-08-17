@@ -90,7 +90,7 @@ export function dockerPage({ t, icon, state, pageTitle, pickerField, field, esca
 
           ${!isRemote ? `
             <p class="section-label">${t("docker.localSettings")}</p>
-            ${renderPicker(t("docker.customRoot"), "docker-custom-root", d.customRoot || "/var/lib/docker", "folder")}
+            ${renderPicker(t("docker.customRoot"), "docker-custom-root", d.customRoot || (typeof navigator !== "undefined" && (navigator.platform?.includes("Win") || navigator.userAgent?.includes("Windows")) ? "C:\\ProgramData\\Docker" : "/var/lib/docker"), "folder")}
             <small class="field-hint" style="margin-top:-6px;margin-bottom:12px;display:block;">${t("docker.customRootHint")}</small>
             <div class="button-row" style="margin-top:14px;">
               <button class="primary-button" data-docker-action="scan-local" ${d.isScanning ? "disabled" : ""}>
