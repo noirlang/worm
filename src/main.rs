@@ -18,6 +18,7 @@ use amele::ram_analysis;
 use amele::remote::RemoteConnection;
 use amele::server;
 use amele::settings::AppSettings;
+use amele::ssh::{SshConnection, SshConnectionParams};
 use amele::wireguard::{self, WireGuardConfig};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
@@ -119,6 +120,10 @@ fn main() {
         Some("remote-disks") => remote_disks_command(args.collect()),
         Some("remote-image") => remote_image_command(args.collect()),
         Some("remote-tool-check") => remote_tool_check_command(args.collect()),
+        Some("ssh-disks") => ssh_disks_command(args.collect()),
+        Some("ssh-tool-check") => ssh_tool_check_command(args.collect()),
+        Some("ssh-image") => ssh_image_command(args.collect()),
+        Some("ssh-ram") => ssh_ram_command(args.collect()),
         Some("ram-status") => ram_status_command(),
         Some("wireguard-config") => wireguard_config_command(args.collect()),
         Some("update-check") | Some("check-update") | Some("update") => {
@@ -1975,6 +1980,166 @@ fn remote_tool_check_command(args: Vec<String>) -> Result<(), String> {
         serde_json::to_string_pretty(&status).map_err(|err| err.to_string())?
     );
     Ok(())
+}
+
+fn ssh_disks_command(args: Vec<String>) -> Result<(), String> {
+    if args.len() < 2 {
+        return Err(t_cli(
+            "Kullanim: ssh-disks <ip> <user> [port] [password] [key_path]",
+            "Usage: ssh-disks <ip> <user> [port] [password] [key_path]",
+        ));
+    }
+    let ip = args[0].clone();
+    let user = args[1].clone();
+    let port = args
+        .get(2)
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(22);
+    let password = args.get(3).cloned();
+    let key_path = args.get(4).cloned();
+
+    let params = SshConnectionParams {
+        ip,
+        port,
+        user,
+        password,
+        key_path,
+    };
+    let mut conn = SshConnection::connect(&params).map_err(|err| err.to_string())?;
+    let disks = conn.list_disks().map_err(|err| err.to_string())?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&disks).map_err(|err| err.to_string())?
+    );
+    Ok(())
+}
+
+fn ssh_tool_check_command(args: Vec<String>) -> Result<(), String> {
+    if args.len() < 2 {
+        return Err(t_cli(
+            "Kullanim: ssh-tool-check <ip> <user> [port] [password] [key_path]",
+            "Usage: ssh-tool-check <ip> <user> [port] [password] [key_path]",
+        ));
+    }
+    let ip = args[0].clone();
+    let user = args[1].clone();
+    let port = args
+        .get(2)
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(22);
+    let password = args.get(3).cloned();
+    let key_path = args.get(4).cloned();
+
+    let params = SshConnectionParams {
+        ip,
+        port,
+        user,
+        password,
+        key_path,
+    };
+    let mut conn = SshConnection::connect(&params).map_err(|err| err.to_string())?;
+    let status = conn.check_ram_tools().map_err(|err| err.to_string())?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&status).map_err(|err| err.to_string())?
+    );
+    Ok(())
+}
+
+fn ssh_image_command(args: Vec<String>) -> Result<(), String> {
+    let mut args = args;
+    let selected_format = extract_output_format(&mut args)?;
+    if args.len() < 4 {
+        return Err(t_cli(
+            "Kullanim: ssh-image <ip> <user> <disk_path> <cikti_klasoru> [case_name] [port] [password] [key_path] [raw|aff4]",
+            "Usage: ssh-image <ip> <user> <disk_path> <out_dir> [case_name] [port] [password] [key_path] [raw|aff4]",
+        ));
+    }
+    let ip = args[0].clone();
+    let user = args[1].clone();
+    let disk_path = args[2].clone();
+    let out_dir = PathBuf::from(&args[3]);
+    let case_name = args.get(4).cloned();
+    let port = args
+        .get(5)
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(22);
+    let password = args.get(6).cloned();
+    let key_path = args.get(7).cloned();
+
+    let params = SshConnectionParams {
+        ip,
+        port,
+        user,
+        password,
+        key_path,
+    };
+    let mut conn = SshConnection::connect(&params).map_err(|err| err.to_string())?;
+    let result = conn
+        .acquire_disk(
+            &disk_path,
+            &out_dir,
+            case_name.as_deref(),
+            selected_format,
+            |done: u64, _total: u64| {
+                eprintln!("{done} bytes transferred");
+            },
+        )
+        .map_err(|err| err.to_string())?;
+    print_json(&json!({
+        "target_path": result.target_path,
+        "bytes_transferred": result.bytes_transferred,
+        "sha256": result.sha256,
+        "md5": result.md5,
+        "message": result.message,
+    }))
+}
+
+fn ssh_ram_command(args: Vec<String>) -> Result<(), String> {
+    let mut args = args;
+    let selected_format = extract_output_format(&mut args)?;
+    if args.len() < 3 {
+        return Err(t_cli(
+            "Kullanim: ssh-ram <ip> <user> <cikti_klasoru> [case_name] [port] [password] [key_path] [raw|aff4]",
+            "Usage: ssh-ram <ip> <user> <out_dir> [case_name] [port] [password] [key_path] [raw|aff4]",
+        ));
+    }
+    let ip = args[0].clone();
+    let user = args[1].clone();
+    let out_dir = PathBuf::from(&args[2]);
+    let case_name = args.get(3).cloned();
+    let port = args
+        .get(4)
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(22);
+    let password = args.get(5).cloned();
+    let key_path = args.get(6).cloned();
+
+    let params = SshConnectionParams {
+        ip,
+        port,
+        user,
+        password,
+        key_path,
+    };
+    let mut conn = SshConnection::connect(&params).map_err(|err| err.to_string())?;
+    let result = conn
+        .acquire_ram(
+            &out_dir,
+            case_name.as_deref(),
+            selected_format,
+            |done: u64, _total: u64| {
+                eprintln!("{done} bytes transferred");
+            },
+        )
+        .map_err(|err| err.to_string())?;
+    print_json(&json!({
+        "target_path": result.target_path,
+        "bytes_transferred": result.bytes_transferred,
+        "sha256": result.sha256,
+        "md5": result.md5,
+        "message": result.message,
+    }))
 }
 
 fn ram_status_command() -> Result<(), String> {
