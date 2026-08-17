@@ -182,7 +182,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-packages
-          path: release-assets/*
+          path: release-assets
           if-no-files-found: error
           retention-days: 7
 
@@ -272,7 +272,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-packages
-          path: release-assets/*
+          path: release-assets
           if-no-files-found: error
           retention-days: 7
 
@@ -291,7 +291,7 @@ jobs:
       - name: Download all release artifacts
         uses: actions/download-artifact@v4
         with:
-          path: release-assets
+          path: downloaded-artifacts
           merge-multiple: true
 
       - name: Create checksums and upload packages
@@ -302,9 +302,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          
+          mkdir -p release-assets
+          find downloaded-artifacts -type f -exec cp -f {} release-assets/ \;
+          
           cd release-assets
-          find . -name '*SHA256SUMS.txt' -delete
-          sha256sum amele-x64-* > "amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt"
-          gh release upload "$RELEASE_TAG" * \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber
+          rm -f *SHA256SUMS.txt
+          
+          echo "=== Downloaded Artifacts ==="
+          ls -lh
+          
+          sha256sum * > "amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt"
+          
+          echo "=== Checksums ==="
+          cat "amele-x64-${ASSET_SUFFIX}-SHA256SUMS.txt"
+          
+          echo "=== Uploading to Release ${RELEASE_TAG} ==="
+          for file in *; do
+            if [[ -f "$file" ]]; then
+              echo "Uploading $file..."
+              gh release upload "$RELEASE_TAG" "$file" \
+                --repo "$GITHUB_REPOSITORY" \
+                --clobber
+            fi
+          done
+          
+          echo "=== Release Complete ==="
