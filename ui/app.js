@@ -3852,7 +3852,7 @@ async function previewCarvedFile(filePath) {
 
 async function loadGitHubContributors() {
   try {
-    const response = await fetch("https://api.github.com/repos/noirlang/amele/commits?per_page=100", {
+    const response = await fetch("https://api.github.com/repos/noirlang/amele/commits?per_page=50", {
       headers: { Accept: "application/vnd.github.v3+json" }
     });
     if (!response.ok) return;
