@@ -3852,16 +3852,11 @@ async function previewCarvedFile(filePath) {
 
 async function loadGitHubContributors() {
   try {
-    const pages = [1, 2, 3, 4];
-    const responses = await Promise.all(
-      pages.map(page =>
-        fetch(`https://api.github.com/repos/noirlang/amele/commits?per_page=100&page=${page}`, {
-          headers: { Accept: "application/vnd.github.v3+json" }
-        }).then(r => (r.ok ? r.json() : [])).catch(() => [])
-      )
-    );
-
-    const commits = responses.flat();
+    const response = await fetch("https://api.github.com/repos/noirlang/amele/commits?per_page=100", {
+      headers: { Accept: "application/vnd.github.v3+json" }
+    });
+    if (!response.ok) return;
+    const commits = await response.json();
     if (!Array.isArray(commits) || commits.length === 0) return;
 
     const seen = new Set();
