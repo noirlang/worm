@@ -3852,12 +3852,17 @@ async function previewCarvedFile(filePath) {
 
 async function loadGitHubContributors() {
   try {
-    const response = await fetch("https://api.github.com/repos/noirlang/amele/commits?per_page=100", {
-      headers: { Accept: "application/vnd.github.v3+json" }
-    });
-    if (!response.ok) return;
-    const commits = await response.json();
-    if (!Array.isArray(commits)) return;
+    const pages = [1, 2, 3, 4];
+    const responses = await Promise.all(
+      pages.map(page =>
+        fetch(`https://api.github.com/repos/noirlang/amele/commits?per_page=100&page=${page}`, {
+          headers: { Accept: "application/vnd.github.v3+json" }
+        }).then(r => (r.ok ? r.json() : [])).catch(() => [])
+      )
+    );
+
+    const commits = responses.flat();
+    if (!Array.isArray(commits) || commits.length === 0) return;
 
     const seen = new Set();
     const result = [];
@@ -3870,10 +3875,10 @@ async function loadGitHubContributors() {
       if (l === "melihemik" || n.includes("melih emik") || e.includes("melihemik") || e.includes("favilances")) {
         return KNOWN_CONTRIBUTORS.melihemik;
       }
-      if (l === "yetece1" || l === "yusuftuncel" || n.includes("yusuf tuncel") || e.includes("yetece") || e.includes("yusuftuncel")) {
+      if (l === "yetece1" || l === "yusuftuncel" || n.includes("yusuf") || e.includes("yetece") || e.includes("yusuftuncel")) {
         return KNOWN_CONTRIBUTORS.yetece1;
       }
-      if (l === "kafkaskrtl" || l === "muhammedaliguner" || n.includes("muhammet ali") || n.includes("muhammed ali") || e.includes("kafkaskrtl") || e.includes("muhammetali")) {
+      if (l === "kafkaskrtl" || l === "muhammedaliguner" || n.includes("muhammet ali") || n.includes("muhammed ali") || n.includes("kafkaskrtl") || e.includes("kafkaskrtl") || e.includes("muhammetali")) {
         return KNOWN_CONTRIBUTORS.kafkaskrtl;
       }
       if (l === "abdulhalimaltuntas" || n.includes("abdulhalim") || e.includes("abdulhalim")) {
@@ -3923,7 +3928,7 @@ async function loadGitHubContributors() {
 
       // 3. Co-authored-by trailers in commit message
       const msg = commit.commit?.message || "";
-      const coAuthorRegex = /Co-authored-by:\s*([^<\r\n]+?)(?:\s*<([^>\r\n]+)>)?/gim;
+      const coAuthorRegex = /Co-authored-by:\s*([^<\r\n]+?)\s*(?:<([^>\r\n]+)>)?$/gim;
       let match;
       while ((match = coAuthorRegex.exec(msg)) !== null) {
         const coName = match[1]?.trim();
