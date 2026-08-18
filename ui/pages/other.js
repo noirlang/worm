@@ -249,7 +249,6 @@ export function aboutPage({ t, icon, APP_VERSION, assetPath, theme }) {
         ${capabilityCard(t("home.android.title"), t("home.android.desc"), "android", "var(--text)", icon)}
         ${capabilityCard(t("home.ios.title"), t("home.ios.desc"), "ios", "var(--text)", icon)}
         ${capabilityCard(t("home.agent.title"), t("home.agent.desc"), "network", "var(--text)", icon)}
-        ${capabilityCard(t("home.analysis.title"), t("home.analysis.desc"), "search", "var(--text)", icon)}
         ${capabilityCard(t("home.other.title"), t("home.other.desc"), "tiles", "var(--text)", icon)}
       </div>
 

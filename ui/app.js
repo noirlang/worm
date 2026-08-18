@@ -5,7 +5,6 @@ import { windowsPage } from "./tools/windows/index.js";
 import { linuxPage } from "./tools/linux/index.js";
 import { agentPage } from "./tools/agent/index.js";
 import { remoteAcqPage } from "./tools/remote-acq/index.js";
-import { analysisPage } from "./tools/analysis/index.js";
 import { createApiRequest } from "./core/api.js";
 import { errorBoxHtml } from "./core/errors.js";
 import { detectPlatform, platformLabel as platformName } from "./core/platform.js";
@@ -764,9 +763,6 @@ function render() {
   if (state.route === "other" && state.activeTab === "history") {
     loadAcquisitionHistory();
   }
-  if (state.route === "analysis") {
-    loadEvidenceCases();
-  }
   if (state.route === "profile") {
     loadEvidenceCases();
   }
@@ -862,7 +858,6 @@ const routes = {
   docker: dockerPage,
   agent: agentPage,
   "remote-acq": remoteAcqPage,
-  analysis: analysisPage,
   profile: profilePage,
   other: otherPage,
   settings: settingsPage,
