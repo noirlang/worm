@@ -14,7 +14,7 @@ import { localText, toolCards, workflows } from "./core/workflows.js";
 import { icon, hydrateIcons, fontIcons } from "./icons.js";
 import { translate } from "./i18n.js";
 import { homePage, metric } from "./pages/home.js";
-import { otherPage, detailPanel, settingsPage, aboutPage, hashPanel } from "./pages/other.js";
+import { otherPage, detailPanel, settingsPage, aboutPage, hashPanel, KNOWN_CONTRIBUTORS } from "./pages/other.js";
 import { workflowPage, pickerField, field, pageTitle, casePanel } from "./pages/workflow.js";
 import { initDeveloperMode, devLog } from "./developer.js";
 import { initJobWidget } from "./core/jobs.js";
@@ -58,6 +58,7 @@ const state = {
   activeCase: null,
   pendingCaseName: "",
   cases: [],
+  contributors: JSON.parse(localStorage.getItem("amele_contributors") || "null") || null,
   acquisitionHistory: [],
   caseBaseDir: "",
   profiles: [],
@@ -3849,6 +3850,67 @@ async function previewCarvedFile(filePath) {
   }
 }
 
+async function loadGitHubContributors() {
+  try {
+    const response = await fetch("https://api.github.com/repos/noirlang/amele/commits?per_page=100", {
+      headers: { Accept: "application/vnd.github.v3+json" }
+    });
+    if (!response.ok) return;
+    const commits = await response.json();
+    if (!Array.isArray(commits)) return;
+
+    const seen = new Set();
+    const result = [];
+
+    const findKnown = (login, name) => {
+      const l = (login || "").toLowerCase().trim();
+      const n = (name || "").toLowerCase().trim();
+      if (l === "melihemik" || n.includes("melih emik")) return KNOWN_CONTRIBUTORS.melihemik;
+      if (l === "yetece1" || l === "yusuftuncel" || n.includes("yusuf tuncel")) return KNOWN_CONTRIBUTORS.yetece1;
+      if (l === "kafkaskrtl" || l === "muhammedaliguner" || n.includes("muhammet ali") || n.includes("muhammed ali")) return KNOWN_CONTRIBUTORS.kafkaskrtl;
+      if (l === "abdulhalimaltuntas" || n.includes("abdulhalim")) return KNOWN_CONTRIBUTORS.abdulhalimaltuntas;
+      return null;
+    };
+
+    for (const commit of commits) {
+      const login = commit.author?.login || "";
+      const gitName = commit.commit?.author?.name || login || "Developer";
+      const key = (login || gitName).toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+
+      const known = findKnown(login, gitName);
+      if (known) {
+        if (!seen.has(known.name)) {
+          seen.add(known.name);
+          result.push(known);
+        }
+      } else {
+        const avatarUrl = commit.author?.avatar_url || (login ? `https://github.com/${login}.png` : "");
+        const profileUrl = commit.author?.html_url || (login ? `https://github.com/${login}` : "");
+        result.push({
+          name: gitName,
+          role: "Developer",
+          photo: avatarUrl,
+          links: profileUrl ? [["GitHub", profileUrl]] : []
+        });
+      }
+    }
+
+    if (result.length > 0) {
+      state.contributors = result;
+      try {
+        localStorage.setItem("amele_contributors", JSON.stringify(result));
+      } catch (e) {}
+      if (state.route === "about") {
+        render();
+      }
+    }
+  } catch (err) {
+    console.warn("GitHub contributors fetch failed, using fallback registry:", err);
+  }
+}
+
 async function bootApp() {
   setLanguage(state.language);
   setTheme(state.theme);
@@ -3863,6 +3925,9 @@ async function bootApp() {
   }
   render();
   if (state.profileGateVisible) renderProfileGate();
+
+  // Load latest GitHub contributors in background
+  loadGitHubContributors().catch(() => {});
 
   // Developer mode — 5 kez logoya tıklayınca aktifleşir
   initDeveloperMode({ apiRequest, backendReady });
