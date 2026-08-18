@@ -3862,38 +3862,73 @@ async function loadGitHubContributors() {
     const seen = new Set();
     const result = [];
 
-    const findKnown = (login, name) => {
+    const findKnown = (login, name, email) => {
       const l = (login || "").toLowerCase().trim();
       const n = (name || "").toLowerCase().trim();
-      if (l === "melihemik" || n.includes("melih emik")) return KNOWN_CONTRIBUTORS.melihemik;
-      if (l === "yetece1" || l === "yusuftuncel" || n.includes("yusuf tuncel")) return KNOWN_CONTRIBUTORS.yetece1;
-      if (l === "kafkaskrtl" || l === "muhammedaliguner" || n.includes("muhammet ali") || n.includes("muhammed ali")) return KNOWN_CONTRIBUTORS.kafkaskrtl;
-      if (l === "abdulhalimaltuntas" || n.includes("abdulhalim")) return KNOWN_CONTRIBUTORS.abdulhalimaltuntas;
+      const e = (email || "").toLowerCase().trim();
+
+      if (l === "melihemik" || n.includes("melih emik") || e.includes("melihemik") || e.includes("favilances")) {
+        return KNOWN_CONTRIBUTORS.melihemik;
+      }
+      if (l === "yetece1" || l === "yusuftuncel" || n.includes("yusuf tuncel") || e.includes("yetece") || e.includes("yusuftuncel")) {
+        return KNOWN_CONTRIBUTORS.yetece1;
+      }
+      if (l === "kafkaskrtl" || l === "muhammedaliguner" || n.includes("muhammet ali") || n.includes("muhammed ali") || e.includes("kafkaskrtl") || e.includes("muhammetali")) {
+        return KNOWN_CONTRIBUTORS.kafkaskrtl;
+      }
+      if (l === "abdulhalimaltuntas" || n.includes("abdulhalim") || e.includes("abdulhalim")) {
+        return KNOWN_CONTRIBUTORS.abdulhalimaltuntas;
+      }
       return null;
     };
 
-    for (const commit of commits) {
-      const login = commit.author?.login || "";
-      const gitName = commit.commit?.author?.name || login || "Developer";
-      const key = (login || gitName).toLowerCase().trim();
-      if (!key || seen.has(key)) continue;
+    const addPerson = (login, name, email, avatarFallback) => {
+      const cleanLogin = (login || "").toLowerCase().trim();
+      const cleanName = (name || "").trim();
+      const key = (cleanLogin || cleanName).toLowerCase();
+      if (!key || seen.has(key)) return;
       seen.add(key);
 
-      const known = findKnown(login, gitName);
+      const known = findKnown(cleanLogin, cleanName, email);
       if (known) {
-        if (!seen.has(known.name)) {
-          seen.add(known.name);
+        if (!seen.has(known.name.toLowerCase())) {
+          seen.add(known.name.toLowerCase());
           result.push(known);
         }
       } else {
-        const avatarUrl = commit.author?.avatar_url || (login ? `https://github.com/${login}.png` : "");
-        const profileUrl = commit.author?.html_url || (login ? `https://github.com/${login}` : "");
+        let derivedLogin = cleanLogin;
+        if (!derivedLogin && email && email.includes("@users.noreply.github.com")) {
+          const match = email.match(/(?:\d+\+)?([^@]+)@users\.noreply\.github\.com/i);
+          if (match) derivedLogin = match[1];
+        }
+        const avatarUrl = avatarFallback || (derivedLogin ? `https://github.com/${derivedLogin}.png` : "");
+        const profileUrl = derivedLogin ? `https://github.com/${derivedLogin}` : "";
         result.push({
-          name: gitName,
+          name: cleanName || derivedLogin || "Developer",
           role: "Developer",
           photo: avatarUrl,
           links: profileUrl ? [["GitHub", profileUrl]] : []
         });
+      }
+    };
+
+    for (const commit of commits) {
+      // 1. Commit Author
+      addPerson(commit.author?.login, commit.commit?.author?.name, commit.commit?.author?.email, commit.author?.avatar_url);
+
+      // 2. Commit Committer (ignoring generic github web-flow)
+      if (commit.committer?.login && commit.committer.login !== "web-flow") {
+        addPerson(commit.committer.login, commit.commit?.committer?.name, commit.commit?.committer?.email, commit.committer?.avatar_url);
+      }
+
+      // 3. Co-authored-by trailers in commit message
+      const msg = commit.commit?.message || "";
+      const coAuthorRegex = /Co-authored-by:\s*([^<\r\n]+?)(?:\s*<([^>\r\n]+)>)?/gim;
+      let match;
+      while ((match = coAuthorRegex.exec(msg)) !== null) {
+        const coName = match[1]?.trim();
+        const coEmail = match[2]?.trim();
+        addPerson("", coName, coEmail, null);
       }
     }
 
