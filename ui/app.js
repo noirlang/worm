@@ -3852,7 +3852,7 @@ async function previewCarvedFile(filePath) {
 
 async function loadGitHubContributors() {
   try {
-    const response = await fetch("https://api.github.com/repos/noirlang/amele/commits?per_page=50", {
+    const response = await fetch("https://api.github.com/repos/noirlang/amele/commits?per_page=30", {
       headers: { Accept: "application/vnd.github.v3+json" }
     });
     if (!response.ok) return;
@@ -3923,12 +3923,14 @@ async function loadGitHubContributors() {
 
       // 3. Co-authored-by trailers in commit message
       const msg = commit.commit?.message || "";
-      const coAuthorRegex = /Co-authored-by:\s*([^<\r\n]+?)\s*(?:<([^>\r\n]+)>)?$/gim;
+      const coAuthorRegex = /Co-authored-by:\s*([^<\r\n]+?)(?:\s*<([^>\r\n]+)>)?(?:\r?\n|$)/gim;
       let match;
       while ((match = coAuthorRegex.exec(msg)) !== null) {
         const coName = match[1]?.trim();
         const coEmail = match[2]?.trim();
-        addPerson("", coName, coEmail, null);
+        if (coName || coEmail) {
+          addPerson("", coName, coEmail, null);
+        }
       }
     }
 

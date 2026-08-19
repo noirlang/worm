@@ -97,7 +97,7 @@ export function detailPanel({ tab, t, icon, state, pickerField, field, escapeHtm
       <div class="log-box" data-logs-output>${t("logs.outputWaiting")}</div>
     `;
   }
-  return hashPanel(pickerField, field);
+  return hashPanel(pickerField, field, state, t, icon);
 }
 
 export function hashPanel(pickerField, field, state, t, icon) {

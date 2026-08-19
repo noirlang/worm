@@ -140,7 +140,7 @@ export function dockerPage({ t, icon, state, pageTitle, pickerField, field, esca
               <table class="docker-table">
                 <thead>
                   <tr>
-                    <th>${t("docker.risk")}</th>
+                    <th>Yetki Modu</th>
                     <th>Konteyner Adı / ID</th>
                     <th>İmaj</th>
                     <th>Durum</th>
@@ -183,23 +183,14 @@ function sideInfo(title, body, iconName, key = "", icon) {
 }
 
 function renderContainerRow(c, t, icon, escapeHtml) {
-  const riskClass =
-    c.risk_level === "CRITICAL" ? "risk-badge-critical" :
-    c.risk_level === "HIGH" ? "risk-badge-high" :
-    c.risk_level === "MEDIUM" ? "risk-badge-medium" : "risk-badge-low";
-
-  const riskLabel =
-    c.risk_level === "CRITICAL" ? t("docker.riskCritical") :
-    c.risk_level === "HIGH" ? t("docker.riskHigh") :
-    c.risk_level === "MEDIUM" ? t("docker.riskMedium") : t("docker.riskLow");
-
+  const isPriv = Boolean(c.privileged || c.breakout_audit?.is_privileged);
   const statusClass = c.running ? "status-badge-running" : "status-badge-stopped";
 
   return `
-    <tr class="docker-row ${c.risk_level === "CRITICAL" || c.risk_level === "HIGH" ? "row-highlight-risk" : ""}">
+    <tr class="docker-row">
       <td>
-        <span class="risk-badge ${riskClass}">
-          ${riskLabel}
+        <span class="badge ${isPriv ? "badge-info" : ""}">
+          ${isPriv ? "Privileged" : "Standart"}
         </span>
       </td>
       <td>
@@ -247,9 +238,6 @@ function renderInspectorModal(c, d, t, icon, escapeHtml) {
         <div class="modal-header">
           <div class="modal-title-group">
             <h2>${icon("docker")} ${escapeHtml(c.name || "container")} <code>(${c.short_id || (c.id ? c.id.substring(0, 12) : "-")})</code></h2>
-            <span class="risk-badge ${c.risk_level === "CRITICAL" ? "risk-badge-critical" : c.risk_level === "HIGH" ? "risk-badge-high" : "risk-badge-low"}">
-              ${c.risk_level} RISK
-            </span>
           </div>
           <button class="modal-close-btn" data-docker-action="close-modal">✕</button>
         </div>
@@ -328,15 +316,10 @@ function renderOverviewTab(c, t, escapeHtml) {
 function renderSecurityTab(c, t, escapeHtml) {
   return `
     <div class="inspector-section">
-      <div class="security-score-banner ${c.risk_level === "CRITICAL" ? "bg-critical" : c.risk_level === "HIGH" ? "bg-high" : "bg-low"}">
-        <h3>Güvenlik Değerlendirmesi: ${c.risk_level} RISK</h3>
-        <p>Amele, konteyner kaçış (breakout) ve host ele geçirme risklerini denetledi.</p>
-      </div>
-
-      <h4 class="inspector-subtitle">Tespit Edilen Risk Faktörleri (${c.risk_reasons?.length || 0})</h4>
+      <h4 class="inspector-subtitle">İzolasyon ve Yetki Yapılandırması</h4>
       ${!c.risk_reasons || c.risk_reasons.length === 0 ? `
         <div class="empty-state-card">
-          <p>Kritik bir güvenlik riski veya yetki yükseltme konfigürasyonu tespit edilmedi.</p>
+          <p>Özel yetkilendirme veya ana makine bağlantısı bulunmuyor (Standart izolasyon).</p>
         </div>
       ` : `
         <ul class="risk-reasons-list">
