@@ -39,6 +39,15 @@ const preferredTheme = ["dark", "light"].includes(requestedTheme || "") ? reques
 const preferredSidebarCollapsed = localStorage.getItem("amele-sidebar-collapsed") === "1";
 if (preferredSidebarCollapsed) app.classList.add("sidebar-collapsed");
 
+function safeJsonParse(value, fallback = null) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 function initialLogMessages(language) {
   return [translate(language, backendAvailable ? "log.appReady" : "log.previewMode")];
 }
@@ -58,7 +67,7 @@ const state = {
   activeCase: null,
   pendingCaseName: "",
   cases: [],
-  contributors: JSON.parse(localStorage.getItem("amele_contributors") || "null") || null,
+  contributors: safeJsonParse(localStorage.getItem("amele_contributors")),
   acquisitionHistory: [],
   caseBaseDir: "",
   profiles: [],
