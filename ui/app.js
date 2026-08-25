@@ -3868,7 +3868,8 @@ async function loadGitHubContributors() {
     const commits = await response.json();
     if (!Array.isArray(commits) || commits.length === 0) return;
 
-    const seen = new Set();
+    const seenKeys = new Set();
+    const seenNames = new Set();
     const result = [];
 
     const findKnown = (login, name, email) => {
@@ -3894,14 +3895,15 @@ async function loadGitHubContributors() {
     const addPerson = (login, name, email, avatarFallback) => {
       const cleanLogin = (login || "").toLowerCase().trim();
       const cleanName = (name || "").trim();
-      const key = (cleanLogin || cleanName).toLowerCase();
-      if (!key || seen.has(key)) return;
-      seen.add(key);
+      const rawKey = `${cleanLogin}|${cleanName}|${(email || "").toLowerCase()}`;
+      if (seenKeys.has(rawKey)) return;
+      seenKeys.add(rawKey);
 
       const known = findKnown(cleanLogin, cleanName, email);
       if (known) {
-        if (!seen.has(known.name.toLowerCase())) {
-          seen.add(known.name.toLowerCase());
+        const knownKey = (known.key || known.name).toLowerCase();
+        if (!seenNames.has(knownKey)) {
+          seenNames.add(knownKey);
           result.push(known);
         }
       } else {
@@ -3910,14 +3912,19 @@ async function loadGitHubContributors() {
           const match = email.match(/(?:\d+\+)?([^@]+)@users\.noreply\.github\.com/i);
           if (match) derivedLogin = match[1];
         }
-        const avatarUrl = avatarFallback || (derivedLogin ? `https://github.com/${derivedLogin}.png` : "");
-        const profileUrl = derivedLogin ? `https://github.com/${derivedLogin}` : "";
-        result.push({
-          name: cleanName || derivedLogin || "Developer",
-          role: "Developer",
-          photo: avatarUrl,
-          links: profileUrl ? [["GitHub", profileUrl]] : []
-        });
+        const finalName = cleanName || derivedLogin || "Developer";
+        const nameKey = finalName.toLowerCase();
+        if (!seenNames.has(nameKey)) {
+          seenNames.add(nameKey);
+          const avatarUrl = avatarFallback || (derivedLogin ? `https://github.com/${derivedLogin}.png` : "");
+          const profileUrl = derivedLogin ? `https://github.com/${derivedLogin}` : "";
+          result.push({
+            name: finalName,
+            role: "Developer",
+            photo: avatarUrl,
+            links: profileUrl ? [["GitHub", profileUrl]] : []
+          });
+        }
       }
     };
 
