@@ -42,3 +42,4 @@ pub use remote::{
     connect_remote_endpoint, disconnect_remote_endpoint, lemon_preflight,
 };
 pub use session::{AndroidSession, AndroidTransport, AndroidTransportKind, build_android_session};
+// TODO: Android Chipset Seviyesi Fiziksel Edinim (Qualcomm EDL & MediaTek BROM)
