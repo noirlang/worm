@@ -12,6 +12,7 @@ mod profile;
 mod ram;
 mod remote;
 mod session;
+// TODO: Android Chipset Seviyesi Fiziksel Edinim (Qualcomm EDL 05c6:9008 & MediaTek BROM 0e8d:0003/2000) destegi ekle: src/android/chipset.rs modulu, USB VID/PID taramasi, API router endpointleri ve UI physical mode entegrasyonu
 
 pub use adb::{AdbInstallResult, AdbStatus, AndroidDevice, adb_status, install_adb, list_devices};
 pub use capability::{
