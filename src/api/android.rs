@@ -889,3 +889,4 @@ pub fn android_remote_disconnect_endpoint(body: &[u8]) -> Response {
 }
 // iceman'le karşılaştığında donup kalmaktan başka ne
 //yapabilirsinki silah sıkamazsın sokaklarda değilsin
+// TODO: Add android_chipset_devices_endpoint and android_physical_acquisition_endpoint for EDL/BROM device discovery and acquisition execution
