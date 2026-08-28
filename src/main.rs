@@ -69,6 +69,11 @@ fn main() {
         let _ = amele::profile::bootstrap_profiles();
     }
 
+    let first_cmd = raw_args.first().map(|s| s.as_str());
+    if !is_silent_or_helper_command(first_cmd, &raw_args) {
+        println!("{AMELE_ASCII_LOGO}\n");
+    }
+
     let mut args = raw_args.into_iter();
     let result = match args.next().as_deref() {
         Some("settings-default") => print_default_settings(),
@@ -261,6 +266,37 @@ mod windows_error {
 
     fn wide_null(value: &str) -> Vec<u16> {
         value.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+}
+
+const AMELE_ASCII_LOGO: &str = r#"          ⣠⣧⡀
+         ⣰⠃⡏⢳⡀
+        ⡴⠁ ⡇ ⠳⡀
+       ⡼⠁ ⡼⠹⡄ ⠹⡄
+     ⢀⡜⠁⢀⡜⠁ ⠘⣆ ⠙⣆
+    ⢀⡞ ⢀⣀⣙⡦⠦⣞⣁⣀ ⠘⣆
+   ⢠⠎⠑⣤⣏⣉⣉⠑⡖⢉⣉⣉⣳⡔⠉⢆
+  ⢠⠿⣄⡰⠋⠳⣤⣤⣤⢧⣤⣤⡴⠋⠳⣀⡼⢧
+ ⣰⠋ ⡼⠛⢦⡞      ⠘⣦⠞⠻⡄⠈⢳⡀
+⣰⣇⣀⣼⣁⣠⠞        ⠘⢦⣀⣹⣄⣀⣷⡀"#;
+
+fn is_silent_or_helper_command(cmd: Option<&str>, raw_args: &[String]) -> bool {
+    match cmd {
+        Some("settings-default")
+        | Some("disk-list-helper")
+        | Some("image-helper")
+        | Some("ram-helper")
+        | Some("avml-install-helper")
+        | Some("winpmem-install-helper")
+        | Some("mount-helper")
+        | Some("disk-size")
+        | Some("remote-tool-check")
+        | Some("ui")
+        | Some("ui-browser") => true,
+        Some("update-check") | Some("check-update") | Some("update") => {
+            raw_args.iter().any(|a| a == "--json")
+        }
+        _ => false,
     }
 }
 
