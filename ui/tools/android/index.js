@@ -3,6 +3,7 @@ export function androidPage({ t, icon, pageTitle, state, escapeHtml, backendRead
     <section class="page">
       ${pageTitle(t("hub.android.title"), t("hub.android.desc"), "android")}
       <div class="tool-grid android-mode-grid">
+// TODO: Enable physical acquisition card, implement EDL/BROM device scan dropdown and physical image trigger
         ${androidImageModeCard("physical", t("android.mode.physical.title"), t("android.mode.physical.desc"), "disk", "var(--text)", t("android.mode.soon"), icon, escapeHtml, { disabled: true })}
         ${androidImageModeCard("logical", t("android.mode.logical.title"), t("android.mode.logical.desc"), "android", "var(--text)", t("android.mode.logical.badge"), icon, escapeHtml)}
         ${androidImageModeCard("filesystem", t("android.mode.filesystem.title"), t("android.mode.filesystem.desc"), "folder", "var(--text)", t("android.mode.filesystem.badge"), icon, escapeHtml)}
